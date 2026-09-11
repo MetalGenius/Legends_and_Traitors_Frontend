@@ -6,11 +6,8 @@
  *
  * This file is the only one that knows which features exist.
  */
+import CreateHomeScreen from '../layouts/CreateHomeScreen'
+
 export function AppRouter() {
-  return (
-    <main className="app-shell">
-      <h1>Legends &amp; Traitors</h1>
-      <p>Feature-based scaffold is up. Add your first route in src/app/router.</p>
-    </main>
-  )
+  return <CreateHomeScreen />
 }
