@@ -1,8 +1,21 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["react", "typescript", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
   "rules": {
+    "no-unused-vars": "error",
+    "react/jsx-key": "error",
+    "react/exhaustive-deps": "error",
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+
+    // This project uses the automatic JSX runtime ("jsx": "react-jsx" in
+    // tsconfig.app.json), so `React` does not need to be in scope. The
+    // `correctness` category would otherwise turn this on.
+    "react/react-in-jsx-scope": "off"
+  },
+  "ignorePatterns": ["dist", "coverage"]
 }
