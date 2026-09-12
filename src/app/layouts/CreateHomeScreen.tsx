@@ -2,14 +2,11 @@ import { useState } from "react";
 
 import backgroundImage from "@assets/images/homescreen.avif";
 import CreateLobbyButton from "@shared/components/ui/CreateLobbyButton.tsx";
+import { useCreateLobby } from "@features/lobby";
+
 export default function ThreeCockOnlineLanding() {
   const [roomId, setRoomId] = useState("");
-  // Placeholder handler — Task #36 replaces this with the real
-  // Create-Lobby API call and success/failure handling.
-  const handleCreateLobby = async () => {
-    console.log("Create Lobby clicked");
-    await new Promise((resolve) => setTimeout(resolve, 5000)); // fake network delay
-  };
+  const { createLobby } = useCreateLobby();
   return (
     <div className="min-h-screen w-full bg-black text-white flex flex-col">
       {/* Top nav bar */}
@@ -83,7 +80,7 @@ export default function ThreeCockOnlineLanding() {
         </p>
 
         <CreateLobbyButton
-          onCreateLobby={handleCreateLobby}
+          onCreateLobby={createLobby}
           className="group border-2 border-white px-2 py-2 transition-transform duration-150 hover:scale-[1.03] active:scale-95 disabled:opacity-70 disabled:hover:scale-100"
           innerClassName="block bg-[#f9b658] text-white font-extrabold text-2xl tracking-wide px-16 py-4 transition-colors duration-150 group-hover:bg-[#ffc670]"
         />
