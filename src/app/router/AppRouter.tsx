@@ -6,7 +6,7 @@
  *
  * This file is the only one that knows which features exist.
  */
-import CreateHomeScreen from '../layouts/CreateHomeScreen'
+import CreateHomeScreen from '@app/layouts/CreateHomeScreen'
 
 export function AppRouter() {
   return <CreateHomeScreen />
