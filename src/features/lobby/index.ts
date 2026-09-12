@@ -9,3 +9,4 @@
  * keeps the boundary visible without pretending the feature exists yet.
  */
 export { useCreateLobby } from './hooks/useCreateLobby'
+export { useJoinLobby } from './hooks/useJoinLobby'

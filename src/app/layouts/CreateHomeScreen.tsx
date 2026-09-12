@@ -1,12 +1,17 @@
 import { useState } from "react";
-
+import { useParams } from "react-router-dom";
 import backgroundImage from "@assets/images/homescreen.avif";
 import CreateLobbyButton from "@shared/components/ui/CreateLobbyButton.tsx";
-import { useCreateLobby } from "@features/lobby";
+import JoinLobbyInput from "@shared/components/ui/JoinLobbyInput.tsx";
+import { useCreateLobby, useJoinLobby } from "@features/lobby";
 
 export default function ThreeCockOnlineLanding() {
   const [roomId, setRoomId] = useState("");
   const { createLobby } = useCreateLobby();
+  const { joinLobby } = useJoinLobby();
+  // Populated when the user arrives via /join/:code
+  const { code } = useParams<{ code?: string }>();
+
   return (
     <div className="min-h-screen w-full bg-black text-white flex flex-col">
       {/* Top nav bar */}
@@ -54,21 +59,14 @@ export default function ThreeCockOnlineLanding() {
         </p>
 
         {/* Room ID + Join */}
-        <div className="w-full max-w-3xl flex items-stretch bg-white rounded-md overflow-hidden shadow-lg mb-12">
-          <input
-            type="text"
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-            placeholder="ROOM ID"
-            className="flex-1 px-6 py-5 !text-black placeholder-gray-400 tracking-widest text-sm uppercase outline-none bg-transparent "
+           <JoinLobbyInput
+            initialCode={code}
+            onSubmit={joinLobby}
+            className="w-full max-w-3xl flex items-stretch bg-white rounded-md overflow-hidden shadow-lg mb-12"
+            inputClassName="flex-1 px-6 py-5 !text-black placeholder-gray-400 tracking-widest text-sm uppercase outline-none bg-transparent"
+            buttonClassName="bg-black text-white font-bold px-10 uppercase tracking-wide hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:hover:bg-black disabled:cursor-not-allowed"
           />
-          <button
-            className="bg-black text-white font-bold px-10 uppercase tracking-wide hover:bg-gray-700 transition-colors"
-            onClick={() => console.log("Join room:", roomId)}
-          >
-            Join
-          </button>
-        </div>
+        
 
         {/* Create room prompt */}
         <p
