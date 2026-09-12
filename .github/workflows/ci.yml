@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  # Push is scoped to the long-lived branches: a PR branch would otherwise
+  # run every job twice (once for `push`, once for `pull_request`).
+  push:
+    branches: [main, dev]
+  pull_request:
+
+# A new push to the same branch cancels the run it superseded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    # Fail fast: no point booting a browser if lint or unit tests are already red.
+    needs: [lint, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: cypress-io/github-action@v7
+        with:
+          build: npm run build
+          start: npm run preview
+          wait-on: http://localhost:4173
+          wait-on-timeout: 120
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-screenshots
+          path: cypress/screenshots
+          if-no-files-found: ignore
