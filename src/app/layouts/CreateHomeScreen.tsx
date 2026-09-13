@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useParams } from "react-router-dom";
 import backgroundImage from "@assets/images/homescreen.avif";
 import CreateLobbyButton from "@shared/components/ui/CreateLobbyButton.tsx";
@@ -6,7 +5,6 @@ import JoinLobbyInput from "@shared/components/ui/JoinLobbyInput.tsx";
 import { useCreateLobby, useJoinLobby } from "@features/lobby";
 
 export default function ThreeCockOnlineLanding() {
-  const [roomId, setRoomId] = useState("");
   const { createLobby } = useCreateLobby();
   const { joinLobby } = useJoinLobby();
   // Populated when the user arrives via /join/:code
