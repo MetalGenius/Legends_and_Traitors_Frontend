@@ -6,8 +6,16 @@
  *
  * This file is the only one that knows which features exist.
  */
-import CreateHomeScreen from '@app/layouts/CreateHomeScreen'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import HomeScreen from '@app/layouts/CreateHomeScreen'
 
 export function AppRouter() {
-  return <CreateHomeScreen />
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomeScreen />} />
+        <Route path="/join/:code" element={<HomeScreen />} />
+      </Routes>
+    </BrowserRouter>
+  )
 }
