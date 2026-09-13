@@ -77,7 +77,7 @@ export default function JoinLobbyInput({
         value={codeInput}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        placeholder="LOBBY CODE"
+        placeholder="ROOM ID"
         maxLength={CODE_LENGTH}
         autoCapitalize="characters"
         autoComplete="off"
