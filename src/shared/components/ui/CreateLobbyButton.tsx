@@ -37,9 +37,13 @@ export default function CreateLobbyButton({
     setIsCreating(true);
     try {
       await onCreateLobby();
+    } catch (error) {
+      // User-facing error handling lands in #36. Catching here (rather than
+      // letting the rejection escape) keeps a failed request from surfacing
+      // as an unhandled promise rejection.
+      console.error("Create lobby failed:", error);
     } finally {
-      // No error handling here by design (covered in Task #36) — this just
-      // ensures the button re-enables regardless of outcome.
+      // Re-enable regardless of outcome.
       setIsCreating(false);
     }
   }, [isCreating, onCreateLobby]);
