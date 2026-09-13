@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, ChangeEvent } from "react";
+import { useState, useEffect, useCallback } from "react";
+import type { ChangeEvent, KeyboardEvent } from "react";
 
 interface JoinLobbyInputProps {
   /**
@@ -63,7 +64,7 @@ export default function JoinLobbyInput({
     setCodeInput(sanitizeCode(e.target.value));
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       handleSubmit();
     }
