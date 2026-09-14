@@ -115,7 +115,7 @@ export default function LobbyScreen({
             >
               Start Game
             </button>
-            <button ฟ
+            <button
               type="button"
               onClick={onLeaveGame}
               className="bg-[#4a4a4a] hover:bg-[#5c5c5c] text-white !font-extrabold text-xl tracking-wide uppercase px-14 py-5 rounded-md transition-transform duration-150 hover:scale-[1.03] active:scale-95"
