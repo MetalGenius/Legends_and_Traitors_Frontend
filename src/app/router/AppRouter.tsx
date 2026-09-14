@@ -8,13 +8,14 @@
  */
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import HomeScreen from '@app/layouts/CreateHomeScreen'
-
+import LobbyRoom from '@app/layouts/LobbyRoom'
 export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomeScreen />} />
         <Route path="/join/:code" element={<HomeScreen />} />
+        <Route path="/lobby" element={<LobbyRoom />} />
       </Routes>
     </BrowserRouter>
   )

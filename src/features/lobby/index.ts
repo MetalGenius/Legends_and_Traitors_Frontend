@@ -10,3 +10,4 @@
  */
 export { useCreateLobby } from './hooks/useCreateLobby'
 export { useJoinLobby } from './hooks/useJoinLobby'
+export { useCopyInviteLink } from './hooks/useCopyInviteLink'
