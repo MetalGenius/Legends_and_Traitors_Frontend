@@ -1,3 +1,5 @@
+import { useParams } from "react-router-dom";
+
 import backgroundImage from "@assets/images/homescreen.avif";
 import { useCopyInviteLink } from "@features/lobby";
 
@@ -9,6 +11,7 @@ interface Player {
 
 interface LobbyScreenProps {
   username?: string;
+  /** Overrides the code from the URL; the /lobby/:code param wins by default. */
   RoomID?: string;
   maxPlayers?: number;
   players?: Player[];
@@ -24,13 +27,17 @@ const DEFAULT_PLAYERS: Player[] = [
 
 export default function LobbyScreen({
   username = "Guest92117",
-  RoomID = "GS1CX4",
+  RoomID,
   maxPlayers = 10,
   players = DEFAULT_PLAYERS,
   onStartGame,
   onLeaveGame,
 }: LobbyScreenProps) {
-  const inviteLink = `https://threecock//?lobby=${RoomID}`;
+  // The lobby code now arrives in the URL (/lobby/:code); the prop is only a
+  // fallback for rendering the screen outside the router (tests, storybook).
+  const { code } = useParams<{ code?: string }>();
+  const lobbyCode = code ?? RoomID ?? "";
+  const inviteLink = `${window.location.origin}/lobby/${lobbyCode}`;
   const { copied, copyInviteLink } = useCopyInviteLink(inviteLink);
 
   return (
@@ -62,7 +69,7 @@ export default function LobbyScreen({
             style={{ fontFamily: "Instrument Serif, serif" }}
             >
             <span>Room ID :</span>
-            <span className="text-red-500 font-bold text-3xl">{RoomID}</span>
+            <span className="text-red-500 font-bold text-3xl">{lobbyCode}</span>
         </div>
         
         {/* Invite description */}

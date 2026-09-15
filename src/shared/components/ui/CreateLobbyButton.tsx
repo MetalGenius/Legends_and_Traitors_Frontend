@@ -1,65 +1,35 @@
-import { useState, useCallback } from "react";
-
 interface CreateLobbyButtonProps {
-  onCreateLobby?: () => Promise<void>;
+  onCreateLobby?: () => void | Promise<void>;
   /** Classes for the outer <button> (e.g. border box). */
   className?: string;
   /** Classes for the inner <span> (e.g. orange fill, text styling). */
   innerClassName?: string;
   label?: string;
-  loadingLabel?: string;
 }
 
-/**
- * CreateLobbyButton
- *
- * Entry point for creating a lobby from the Home screen.
- * Available to both guest and logged-in users — no auth gate.
- *
- * The actual API call / success-failure handling is out of scope for this
- * component (see #36); `onCreateLobby` is a placeholder hook that Task 2
- * will wire up to the real request. This component only owns the
- * `isCreating` local state so the button can disable itself while a
- * request is in flight.
- */
 export default function CreateLobbyButton({
-  onCreateLobby = () => Promise.resolve(),
+  onCreateLobby = () => {},
   className = "",
   innerClassName = "",
   label = "CREATE",
-  loadingLabel = "CREATING...",
 }: CreateLobbyButtonProps) {
-  const [isCreating, setIsCreating] = useState(false);
-
-  const handleClick = useCallback(async () => {
-    if (isCreating) return;
-
-    setIsCreating(true);
-    try {
-      await onCreateLobby();
-    } catch (error) {
-      // User-facing error handling lands in #36. Catching here (rather than
-      // letting the rejection escape) keeps a failed request from surfacing
-      // as an unhandled promise rejection.
+  const handleClick = () => {
+    // No in-flight state: the click navigates straight to the lobby room.
+    // If a handler ever returns a rejected promise, swallow it here so it
+    // doesn't surface as an unhandled rejection (real error handling: #36).
+    void Promise.resolve(onCreateLobby()).catch((error: unknown) => {
       console.error("Create lobby failed:", error);
-    } finally {
-      // Re-enable regardless of outcome.
-      setIsCreating(false);
-    }
-  }, [isCreating, onCreateLobby]);
+    });
+  };
 
   return (
     <button
       type="button"
       onClick={handleClick}
-      disabled={isCreating}
-      aria-busy={isCreating}
       data-testid="create-lobby-button"
-      className={`${className} disabled:cursor-not-allowed`}
+      className={className}
     >
-      <span className={innerClassName}>
-        {isCreating ? loadingLabel : label}
-      </span>
+      <span className={innerClassName}>{label}</span>
     </button>
   );
 }

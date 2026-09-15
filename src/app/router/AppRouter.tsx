@@ -14,8 +14,7 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomeScreen />} />
-        <Route path="/join/:code" element={<HomeScreen />} />
-        <Route path="/lobby" element={<LobbyRoom />} />
+        <Route path="/lobby/:code" element={<LobbyRoom />} />
       </Routes>
     </BrowserRouter>
   )

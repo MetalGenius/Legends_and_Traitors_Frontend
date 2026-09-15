@@ -4,8 +4,9 @@ describe('Home screen', () => {
   })
 
   it('renders the landing content', () => {
-    cy.contains('h1', 'Three Cock online').should('be.visible')
+    cy.contains('h1', 'Legend and Traitor').should('be.visible')
     cy.contains('button', 'Login').should('be.visible')
+    cy.get('[data-testid="join-lobby-input"]').should('be.visible')
     cy.get('[data-testid="create-lobby-button"]')
       .should('be.visible')
       .and('not.be.disabled')
@@ -18,18 +19,26 @@ describe('Home screen', () => {
       .should('have.value', 'ABC123')
   })
 
-  it('disables the create button while a lobby is being created', () => {
-    cy.get('[data-testid="create-lobby-button"]').as('create')
+  it('goes straight to the lobby room when create is clicked', () => {
+    cy.get('[data-testid="create-lobby-button"]').click()
 
-    cy.get('@create').click()
-    cy.get('@create')
-      .should('be.disabled')
-      .and('have.attr', 'aria-busy', 'true')
-      .and('contain', 'CREATING...')
+    // No CREATING... step - the click navigates immediately. Assert the room
+    // actually rendered: a URL check alone passes even on an unmatched route.
+    cy.url().should('match', /\/lobby\/[A-Z0-9]{6}$/)
+    // Assert the room actually rendered with that code: a URL check alone
+    // passes even on an unmatched route that renders nothing.
+    cy.contains('Room ID').should('be.visible')
+    cy.url().then((url) => {
+      const code = url.split('/lobby/')[1]
+      cy.contains(code).should('be.visible')
+    })
+  })
 
-    // useCreateLobby is still a placeholder with a 5s fake delay (#36).
-    cy.get('@create', { timeout: 15000 })
-      .should('not.be.disabled')
-      .and('contain', 'CREATE')
+  it('joins a lobby by code and lands in that room', () => {
+    cy.get('[data-testid="join-lobby-input"]').type('ABC123')
+    cy.get('[data-testid="join-lobby-submit"]').click()
+
+    cy.url().should('include', '/lobby/ABC123')
+    cy.contains('ABC123').should('be.visible')
   })
 })
