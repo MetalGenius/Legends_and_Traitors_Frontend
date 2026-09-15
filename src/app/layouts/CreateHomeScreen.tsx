@@ -1,4 +1,3 @@
-import { useParams } from "react-router-dom";
 import backgroundImage from "@assets/images/homescreen.avif";
 import CreateLobbyButton from "@shared/components/ui/CreateLobbyButton.tsx";
 import JoinLobbyInput from "@shared/components/ui/JoinLobbyInput.tsx";
@@ -7,24 +6,16 @@ import { useCreateLobby, useJoinLobby } from "@features/lobby";
 export default function ThreeCockOnlineLanding() {
   const { createLobby } = useCreateLobby();
   const { joinLobby } = useJoinLobby();
-  // Populated when the user arrives via /join/:code
-  const { code } = useParams<{ code?: string }>();
 
   return (
     <div className="min-h-screen w-full bg-black text-white flex flex-col">
       {/* Top nav bar */}
-      <header className="w-full bg-[#1a1a1a] px-8 py-5 flex items-center justify-between gap-6">
-        <span
-          className="text-lg font-bold tracking-wide"
-          style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-        >
-          Three Cock
-        </span>
+      <header className="w-full bg-[#1a1a1a] px-8 py-5 flex items-center justify-end gap-6">
         <div className="flex items-center gap-6">
-          <button className="text-sm text-gray-200 hover:text-white transition-colors">
+          <button className="joti-one-regular cursor-pointer text-sm text-gray-200 hover:underline">
             Sign in
           </button>
-          <button className="bg-white !text-black text-sm font-medium px-6 py-2 rounded-sm hover:bg-gray-200 transition-colors">
+          <button className="joti-one-regular cursor-pointer bg-white !text-black text-sm px-6 py-2 rounded-sm hover:underline">
             Login
           </button>
         </div>
@@ -43,7 +34,7 @@ export default function ThreeCockOnlineLanding() {
           // style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
           style={{ fontFamily: "'Uncial Antiqua', Georgia, serif" }}
         >
-          Three Cock online
+          Legend and Traitor
         </h1>
 
         {/* Subtitle */}
@@ -52,17 +43,16 @@ export default function ThreeCockOnlineLanding() {
           style={{ fontFamily: "Instrument Serif, serif" }}
           // style={{ fontFamily: "Georgia, serif" }}
         >
-          3 Cock online - game full of battle and lies, where you see people
+          Legend and Traitor - game full of battle and lies, where you see people
           true color when in the last moment
         </p>
 
         {/* Room ID + Join */}
            <JoinLobbyInput
-            initialCode={code}
             onSubmit={joinLobby}
             className="w-full max-w-3xl flex items-stretch bg-white rounded-md overflow-hidden shadow-lg mb-12"
-            inputClassName="flex-1 px-6 py-5 !text-black placeholder-gray-400 tracking-widest text-sm uppercase outline-none bg-transparent"
-            buttonClassName="bg-black text-white font-bold px-10 uppercase tracking-wide hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:hover:bg-black disabled:cursor-not-allowed"
+            inputClassName="flex-1 px-6 py-5 !text-black placeholder-gray-400 placeholder:font-['Joti_One'] tracking-widest text-sm uppercase outline-none bg-transparent"
+            buttonClassName="joti-one-regular cursor-pointer bg-black text-white px-9 py-4 rounded m-2 uppercase tracking-wide hover:bg-[#666666] transition-colors"
           />
         
 
@@ -77,8 +67,8 @@ export default function ThreeCockOnlineLanding() {
 
         <CreateLobbyButton
           onCreateLobby={createLobby}
-          className="group border-2 border-white px-2 py-2 transition-transform duration-150 hover:scale-[1.03] active:scale-95 disabled:opacity-70 disabled:hover:scale-100"
-          innerClassName="block bg-[#f9b658] text-white font-extrabold text-2xl tracking-wide px-16 py-4 transition-colors duration-150 group-hover:bg-[#ffc670]"
+          className="group cursor-pointer border-2 border-white px-2 py-2"
+          innerClassName="joti-one-regular block bg-[#f9b658] text-white text-2xl tracking-wide px-16 py-4 transition-colors duration-150 group-hover:bg-white group-hover:!text-black"
         />
       </main>
     </div>

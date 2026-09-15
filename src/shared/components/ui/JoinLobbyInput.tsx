@@ -1,13 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 
 interface JoinLobbyInputProps {
-  /**
-   * Pre-filled code, typically read from the /join/:code URL param.
-   * When present and valid (6 letters), the manual-entry step is skipped
-   * and onSubmit fires automatically on mount.
-   */
-  initialCode?: string;
   /**
    * Called with the sanitized 6-character code once submitted — either by
    * clicking the button (manual path) or automatically (URL path).
@@ -30,13 +24,12 @@ function sanitizeCode(raw: string): string {
 }
 
 export default function JoinLobbyInput({
-  initialCode = "",
   onSubmit,
   className = "",
   inputClassName = "",
   buttonClassName = "",
 }: JoinLobbyInputProps) {
-  const [codeInput, setCodeInput] = useState(() => sanitizeCode(initialCode));
+  const [codeInput, setCodeInput] = useState("");
 
   const isValid = codeInput.length === CODE_LENGTH;
 
@@ -44,19 +37,6 @@ export default function JoinLobbyInput({
     if (!isValid) return;
     onSubmit(codeInput);
   }, [isValid, codeInput, onSubmit]);
-
-  // URL-based auto-join: if we arrived with a valid code already (e.g. from
-  // /join/:code), skip the manual input step entirely and submit right away.
-  useEffect(() => {
-    const sanitized = sanitizeCode(initialCode);
-    if (sanitized.length === CODE_LENGTH) {
-      setCodeInput(sanitized);
-      onSubmit(sanitized);
-    }
-    // Only run this on mount / when initialCode changes — not on every
-    // manual keystroke.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialCode]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     // Handles both typing and pasting — a pasted lowercase/mixed-case code
@@ -89,11 +69,14 @@ export default function JoinLobbyInput({
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={!isValid}
+        // aria-disabled, not `disabled`: a truly disabled button is inert in
+        // Chromium - it receives neither :hover nor a cursor. handleSubmit
+        // already ignores clicks while the code is incomplete.
+        aria-disabled={!isValid}
         data-testid="join-lobby-submit"
         className={buttonClassName}
       >
-        Join
+        JOIN
       </button>
     </div>
   );
