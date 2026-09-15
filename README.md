@@ -113,6 +113,7 @@ machine-enforced.
 | `@shared/*` | `src/shared/` |
 | `@assets/*` | `src/assets/` |
 | `@styles/*` | `src/styles/` |
+| `@mocks/*` | `src/mocks/` (test-only: MSW handlers and server) |
 
 Aliases are declared twice — `paths` in `tsconfig.app.json` (for the type checker
 and editor) and `resolve.alias` in `vite.config.ts` (for the bundler).

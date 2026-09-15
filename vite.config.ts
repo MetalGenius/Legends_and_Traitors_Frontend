@@ -15,6 +15,7 @@ export default defineConfig({
       '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),
       '@assets': fileURLToPath(new URL('./src/assets', import.meta.url)),
       '@styles': fileURLToPath(new URL('./src/styles', import.meta.url)),
+      '@mocks': fileURLToPath(new URL('./src/mocks', import.meta.url)),
     },
   },
   test: {
