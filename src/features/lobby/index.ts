@@ -11,3 +11,4 @@
 export { useCreateLobby } from './hooks/useCreateLobby'
 export { useJoinLobby } from './hooks/useJoinLobby'
 export { useCopyInviteLink } from './hooks/useCopyInviteLink'
+export { default as PlayerListItem } from './components/PlayerListItem'
