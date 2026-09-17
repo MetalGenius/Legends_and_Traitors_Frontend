@@ -12,6 +12,7 @@ export default function PlayerListItem({ name, isHost = false }: PlayerListItemP
     <div className="relative w-56 rounded-xl border-4 border-[#e0a548] bg-[#d9d9d9] overflow-hidden transition-transform duration-150 hover:scale-[1.03]">
       {isHost && (
         <Crown
+          data-testid="host-crown"
           className="absolute top-2 right-2 text-yellow-400 fill-yellow-400"
           size={24}
         />
