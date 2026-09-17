@@ -1,12 +1,13 @@
 import { useParams } from "react-router-dom";
 
 import backgroundImage from "@assets/images/homescreen.avif";
-import { useCopyInviteLink } from "@features/lobby";
+import { useCopyInviteLink, PlayerListItem } from "@features/lobby";
 
 interface Player {
   id: string;
   name: string;
   avatarUrl?: string;
+  isHost?: boolean;
 }
 
 interface LobbyScreenProps {
@@ -20,7 +21,7 @@ interface LobbyScreenProps {
 }
 
 const DEFAULT_PLAYERS: Player[] = [
-  { id: "1", name: "Player 1" },
+  { id: "1", name: "Player 1", isHost: true },
   { id: "2", name: "Player 1" },
   { id: "3", name: "Player 1" },
 ];
@@ -101,15 +102,7 @@ export default function LobbyScreen({
           {/* Player cards */}
           <div className="flex flex-wrap justify-center gap-8 mb-15 mt-10">
             {players.map((player) => (
-              <div
-                key={player.id}
-                className="w-56 rounded-xl border-4 border-[#e0a548] bg-[#d9d9d9] overflow-hidden transition-transform duration-150 hover:scale-[1.03]"
-                >
-                <div className="h-44 bg-[#9c9c9c]" />
-                <p className="text-center text-black py-3 text-base">
-                    {player.name}
-                </p>
-                </div>
+              <PlayerListItem key={player.id} name={player.name} isHost={player.isHost} />
             ))}
           </div>
 
