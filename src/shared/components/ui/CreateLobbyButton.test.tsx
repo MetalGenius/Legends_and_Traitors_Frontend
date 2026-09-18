@@ -49,4 +49,28 @@ describe('CreateLobbyButton', () => {
     expect(consoleError).toHaveBeenCalled()
     consoleError.mockRestore()
   })
+
+  describe('with an externally-controlled disabled prop', () => {
+    it('shows the loading label and disables the button', () => {
+      render(<CreateLobbyButton disabled />)
+
+      expect(getButton().textContent).toBe('CREATING...')
+      expect(getButton().disabled).toBe(true)
+    })
+
+    it('supports a custom loading label', () => {
+      render(<CreateLobbyButton disabled loadingLabel="Working..." />)
+
+      expect(getButton().textContent).toBe('Working...')
+    })
+
+    it('ignores clicks while disabled', () => {
+      const onCreateLobby = vi.fn()
+      render(<CreateLobbyButton disabled onCreateLobby={onCreateLobby} />)
+
+      fireEvent.click(getButton())
+
+      expect(onCreateLobby).not.toHaveBeenCalled()
+    })
+  })
 })
