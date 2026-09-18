@@ -1,24 +1,34 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const CODE_LENGTH = 6;
-const CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+import { ApiError, createLobby as createLobbyRequest } from "@features/lobby/api/lobbyApi";
+import { useLobbyStore } from "@features/lobby/stores/lobbyStore";
 
-/** Stand-in for the code the API will return (#36). */
-function placeholderCode(): string {
-  return Array.from(
-    { length: CODE_LENGTH },
-    () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)],
-  ).join("");
-}
-
-// Placeholder handler — Task #36 replaces this with the real Create-Lobby
-// API call, which will return the new lobby's code to navigate to.
 export function useCreateLobby() {
   const navigate = useNavigate();
+  const setLobby = useLobbyStore((state) => state.setLobby);
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const createLobby = () => {
-    navigate(`/lobby/${placeholderCode()}`);
+  const createLobby = async () => {
+    if (isCreating) return;
+
+    setIsCreating(true);
+    setError(null);
+    try {
+      const response = await createLobbyRequest();
+      setLobby(response.data);
+      navigate(`/lobby/${response.data.lobbyCode}`);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't reach the server. Please check your connection and try again.",
+      );
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  return { createLobby };
+  return { createLobby, isCreating, error };
 }

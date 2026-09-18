@@ -7,6 +7,7 @@ import {
   type LoginResponse,
   type Profile,
 } from '@features/auth'
+import { LOBBY_ENDPOINTS, type CreateLobbyResponse } from '@features/lobby'
 
 // Default (happy-path) handlers shared by every test. A test that needs a
 // failure overrides one with `server.use()`; the override is reset after each
@@ -20,6 +21,14 @@ export const mockProfile: Profile = {
   email: 'arthur@camelot.test',
   displayName: 'Arthur Pendragon',
   avatarUrl: null,
+}
+
+export const mockLobby: CreateLobbyResponse['data'] = {
+  lobbyCode: 'AB12CD',
+  lobbyUrl: 'https://app.com/lobby/AB12CD',
+  hostId: 'host-1',
+  maxPlayers: 8,
+  players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
 }
 
 export const handlers = [
@@ -41,4 +50,8 @@ export const handlers = [
       return HttpResponse.json(mockProfile)
     },
   ),
+
+  http.post<never, never, CreateLobbyResponse>(LOBBY_ENDPOINTS.create, () => {
+    return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
+  }),
 ]

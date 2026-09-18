@@ -1,13 +1,14 @@
 import { useParams } from "react-router-dom";
 
 import backgroundImage from "@assets/images/homescreen.avif";
-import { useCopyInviteLink, PlayerListItem } from "@features/lobby";
+import { useCopyInviteLink, useLobbyStore, PlayerListItem } from "@features/lobby";
 
 interface Player {
   id: string;
   name: string;
   avatarUrl?: string;
   isHost?: boolean;
+  isReady?: boolean;
 }
 
 interface LobbyScreenProps {
@@ -29,8 +30,8 @@ const DEFAULT_PLAYERS: Player[] = [
 export default function LobbyScreen({
   username = "Guest92117",
   RoomID,
-  maxPlayers = 10,
-  players = DEFAULT_PLAYERS,
+  maxPlayers: maxPlayersProp = 10,
+  players: playersProp = DEFAULT_PLAYERS,
   onStartGame,
   onLeaveGame,
 }: LobbyScreenProps) {
@@ -38,6 +39,16 @@ export default function LobbyScreen({
   // fallback for rendering the screen outside the router (tests, storybook).
   const { code } = useParams<{ code?: string }>();
   const lobbyCode = code ?? RoomID ?? "";
+
+  // Once Create/Join Lobby actually calls the API, this holds the real
+  // response (lobbyCode, lobbyUrl, maxPlayers, players). Falls back to
+  // props/defaults when nothing's been created yet (direct URL visit,
+  // tests, storybook).
+  const lobby = useLobbyStore((state) => state.lobby);
+  const maxPlayers = lobby?.maxPlayers ?? maxPlayersProp;
+  const players = lobby?.players ?? playersProp;
+  // Built from this app's own origin rather than the server's lobbyUrl, so
+  // the copied link always points at wherever this app is actually running.
   const inviteLink = `${window.location.origin}/lobby/${lobbyCode}`;
   const { copied, copyInviteLink } = useCopyInviteLink(inviteLink);
 
@@ -102,7 +113,12 @@ export default function LobbyScreen({
           {/* Player cards */}
           <div className="flex flex-wrap justify-center gap-8 mb-15 mt-10">
             {players.map((player) => (
-              <PlayerListItem key={player.id} name={player.name} isHost={player.isHost} />
+              <PlayerListItem
+                key={player.id}
+                name={player.name}
+                isHost={player.isHost}
+                isReady={player.isReady}
+              />
             ))}
           </div>
 

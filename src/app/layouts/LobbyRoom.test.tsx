@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useLobbyStore } from '@features/lobby'
+
 import LobbyRoom from './LobbyRoom'
 
 function renderLobby(props: Record<string, unknown> = {}) {
@@ -18,6 +20,9 @@ beforeEach(() => {
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
   })
+  // The lobby store is a module-level singleton shared across tests - reset
+  // it so a previous test's created lobby can't leak into this one.
+  useLobbyStore.getState().clearLobby()
 })
 
 describe('LobbyRoom', () => {
@@ -74,6 +79,24 @@ describe('LobbyRoom', () => {
     expect(await screen.findByText('Copied!')).toBeDefined()
   })
 
+  it("copies this app's own origin, not the server's lobbyUrl domain", async () => {
+    useLobbyStore.getState().setLobby({
+      lobbyCode: 'AB12CD',
+      lobbyUrl: 'https://app.com/lobby/AB12CD',
+      hostId: 'host-1',
+      maxPlayers: 8,
+      players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
+    })
+
+    renderLobby()
+
+    fireEvent.click(screen.getByTitle('Click to copy invite link'))
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      `${window.location.origin}/lobby/AB12CD`,
+    )
+  })
+
   it('calls onStartGame when Start Game is clicked', () => {
     const onStartGame = vi.fn()
     renderLobby({ onStartGame })
@@ -90,5 +113,28 @@ describe('LobbyRoom', () => {
     fireEvent.click(screen.getByText('Leave Game'))
 
     expect(onLeaveGame).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the real lobby from the store instead of the prop defaults, when one exists', () => {
+    useLobbyStore.getState().setLobby({
+      lobbyCode: 'AB12CD',
+      lobbyUrl: 'https://app.com/lobby/AB12CD',
+      hostId: 'host-1',
+      maxPlayers: 8,
+      players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
+    })
+
+    // Passed props should be ignored once the store has real data.
+    renderLobby({
+      maxPlayers: 10,
+      players: [
+        { id: '1', name: 'Player 1' },
+        { id: '2', name: 'Player 1' },
+      ],
+    })
+
+    expect(screen.getByText('Player (1/8)')).toBeDefined()
+    expect(screen.getByText('HostName')).toBeDefined()
+    expect(screen.queryByText('Player 1')).toBeNull()
   })
 })

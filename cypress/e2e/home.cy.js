@@ -20,7 +20,24 @@ describe('Home screen', () => {
   })
 
   it('goes straight to the lobby room when create is clicked', () => {
+    cy.intercept('POST', '/api/lobby', {
+      statusCode: 200,
+      body: {
+        status: 'SUCCESS',
+        data: {
+          lobbyCode: 'AB12CD',
+          lobbyUrl: 'https://app.com/lobby/AB12CD',
+          hostId: 'host-1',
+          maxPlayers: 8,
+          players: [
+            { id: 'host-1', name: 'HostName', isHost: true, isReady: false },
+          ],
+        },
+      },
+    }).as('createLobby')
+
     cy.get('[data-testid="create-lobby-button"]').click()
+    cy.wait('@createLobby')
 
     // No CREATING... step - the click navigates immediately. Assert the room
     // actually rendered: a URL check alone passes even on an unmatched route.

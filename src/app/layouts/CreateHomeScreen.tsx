@@ -4,7 +4,7 @@ import JoinLobbyInput from "@shared/components/ui/JoinLobbyInput.tsx";
 import { useCreateLobby, useJoinLobby } from "@features/lobby";
 
 export default function ThreeCockOnlineLanding() {
-  const { createLobby } = useCreateLobby();
+  const { createLobby, isCreating, error: createLobbyError } = useCreateLobby();
   const { joinLobby } = useJoinLobby();
 
   return (
@@ -67,9 +67,16 @@ export default function ThreeCockOnlineLanding() {
 
         <CreateLobbyButton
           onCreateLobby={createLobby}
+          disabled={isCreating}
           className="group cursor-pointer border-2 border-white px-2 py-2"
           innerClassName="joti-one-regular block bg-[#f9b658] text-white text-2xl tracking-wide px-16 py-4 transition-colors duration-150 group-hover:bg-white group-hover:!text-black"
         />
+
+        {createLobbyError && (
+          <p className="text-red-400 text-sm mt-3" role="alert">
+            {createLobbyError}
+          </p>
+        )}
       </main>
     </div>
   );
