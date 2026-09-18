@@ -47,8 +47,8 @@ export default function LobbyScreen({
   const lobby = useLobbyStore((state) => state.lobby);
   const maxPlayers = lobby?.maxPlayers ?? maxPlayersProp;
   const players = lobby?.players ?? playersProp;
-  // Always point at this app's own /lobby/:code route - the server's
-  // lobbyUrl (currently /join/:code) is a different flow, not used here.
+  // Built from this app's own origin rather than the server's lobbyUrl, so
+  // the copied link always points at wherever this app is actually running.
   const inviteLink = `${window.location.origin}/lobby/${lobbyCode}`;
   const { copied, copyInviteLink } = useCopyInviteLink(inviteLink);
 

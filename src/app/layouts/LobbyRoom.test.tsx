@@ -79,10 +79,10 @@ describe('LobbyRoom', () => {
     expect(await screen.findByText('Copied!')).toBeDefined()
   })
 
-  it("copies this app's /lobby/:code link even when the store has a different lobbyUrl", async () => {
+  it("copies this app's own origin, not the server's lobbyUrl domain", async () => {
     useLobbyStore.getState().setLobby({
       lobbyCode: 'AB12CD',
-      lobbyUrl: 'https://app.com/join/AB12CD',
+      lobbyUrl: 'https://app.com/lobby/AB12CD',
       hostId: 'host-1',
       maxPlayers: 8,
       players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
@@ -118,7 +118,7 @@ describe('LobbyRoom', () => {
   it('shows the real lobby from the store instead of the prop defaults, when one exists', () => {
     useLobbyStore.getState().setLobby({
       lobbyCode: 'AB12CD',
-      lobbyUrl: 'https://app.com/join/AB12CD',
+      lobbyUrl: 'https://app.com/lobby/AB12CD',
       hostId: 'host-1',
       maxPlayers: 8,
       players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
