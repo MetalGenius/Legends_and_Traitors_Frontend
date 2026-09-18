@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 
 import backgroundImage from "@assets/images/homescreen.avif";
-import { useCopyInviteLink, PlayerListItem } from "@features/lobby";
+import { useCopyInviteLink, useLobbyStore, PlayerListItem } from "@features/lobby";
 
 interface Player {
   id: string;
@@ -29,8 +29,8 @@ const DEFAULT_PLAYERS: Player[] = [
 export default function LobbyScreen({
   username = "Guest92117",
   RoomID,
-  maxPlayers = 10,
-  players = DEFAULT_PLAYERS,
+  maxPlayers: maxPlayersProp = 10,
+  players: playersProp = DEFAULT_PLAYERS,
   onStartGame,
   onLeaveGame,
 }: LobbyScreenProps) {
@@ -40,6 +40,13 @@ export default function LobbyScreen({
   const lobbyCode = code ?? RoomID ?? "";
   const inviteLink = `${window.location.origin}/lobby/${lobbyCode}`;
   const { copied, copyInviteLink } = useCopyInviteLink(inviteLink);
+
+  // Once Create/Join Lobby actually calls the API, this holds the real
+  // response (lobbyCode, maxPlayers, players). Falls back to props/defaults
+  // when nothing's been created yet (direct URL visit, tests, storybook).
+  const lobby = useLobbyStore((state) => state.lobby);
+  const maxPlayers = lobby?.maxPlayers ?? maxPlayersProp;
+  const players = lobby?.players ?? playersProp;
 
   return (
     <div className="min-h-screen w-full bg-black text-white flex flex-col">
