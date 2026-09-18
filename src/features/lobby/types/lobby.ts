@@ -6,6 +6,7 @@ export interface LobbyPlayer {
   id: string
   name: string
   isHost: boolean
+  isReady: boolean
 }
 
 export interface LobbyData {

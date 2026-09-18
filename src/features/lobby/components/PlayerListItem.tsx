@@ -3,9 +3,14 @@ import { Crown } from "lucide-react";
 interface PlayerListItemProps {
   name: string;
   isHost?: boolean;
+  isReady?: boolean;
 }
 
-export default function PlayerListItem({ name, isHost = false }: PlayerListItemProps) {
+export default function PlayerListItem({
+  name,
+  isHost = false,
+  isReady = false,
+}: PlayerListItemProps) {
   const initial = name.trim().charAt(0).toUpperCase();
 
   return (
@@ -21,6 +26,14 @@ export default function PlayerListItem({ name, isHost = false }: PlayerListItemP
         {initial}
       </div>
       <p className="text-center text-black py-3 text-base">{name}</p>
+      <p
+        data-testid="player-ready-status"
+        className={`text-center text-xs font-bold uppercase tracking-wide pb-2 ${
+          isReady ? "text-green-700" : "text-gray-500"
+        }`}
+      >
+        {isReady ? "Ready" : "Not Ready"}
+      </p>
     </div>
   );
 }

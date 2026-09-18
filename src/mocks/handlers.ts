@@ -28,7 +28,7 @@ export const mockLobby: CreateLobbyResponse['data'] = {
   lobbyUrl: 'https://app.com/join/AB12CD',
   hostId: 'host-1',
   maxPlayers: 8,
-  players: [{ id: 'host-1', name: 'HostName', isHost: true }],
+  players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
 }
 
 export const handlers = [
