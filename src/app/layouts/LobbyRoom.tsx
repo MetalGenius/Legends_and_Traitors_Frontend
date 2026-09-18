@@ -8,6 +8,7 @@ interface Player {
   name: string;
   avatarUrl?: string;
   isHost?: boolean;
+  isReady?: boolean;
 }
 
 interface LobbyScreenProps {
@@ -38,15 +39,18 @@ export default function LobbyScreen({
   // fallback for rendering the screen outside the router (tests, storybook).
   const { code } = useParams<{ code?: string }>();
   const lobbyCode = code ?? RoomID ?? "";
-  const inviteLink = `${window.location.origin}/lobby/${lobbyCode}`;
-  const { copied, copyInviteLink } = useCopyInviteLink(inviteLink);
 
   // Once Create/Join Lobby actually calls the API, this holds the real
-  // response (lobbyCode, maxPlayers, players). Falls back to props/defaults
-  // when nothing's been created yet (direct URL visit, tests, storybook).
+  // response (lobbyCode, lobbyUrl, maxPlayers, players). Falls back to
+  // props/defaults when nothing's been created yet (direct URL visit,
+  // tests, storybook).
   const lobby = useLobbyStore((state) => state.lobby);
   const maxPlayers = lobby?.maxPlayers ?? maxPlayersProp;
   const players = lobby?.players ?? playersProp;
+  // Always point at this app's own /lobby/:code route - the server's
+  // lobbyUrl (currently /join/:code) is a different flow, not used here.
+  const inviteLink = `${window.location.origin}/lobby/${lobbyCode}`;
+  const { copied, copyInviteLink } = useCopyInviteLink(inviteLink);
 
   return (
     <div className="min-h-screen w-full bg-black text-white flex flex-col">
@@ -109,7 +113,12 @@ export default function LobbyScreen({
           {/* Player cards */}
           <div className="flex flex-wrap justify-center gap-8 mb-15 mt-10">
             {players.map((player) => (
-              <PlayerListItem key={player.id} name={player.name} isHost={player.isHost} />
+              <PlayerListItem
+                key={player.id}
+                name={player.name}
+                isHost={player.isHost}
+                isReady={player.isReady}
+              />
             ))}
           </div>
 
