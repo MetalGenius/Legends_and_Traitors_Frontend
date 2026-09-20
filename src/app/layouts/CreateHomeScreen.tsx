@@ -1,11 +1,14 @@
 import backgroundImage from "@assets/images/homescreen.avif";
 import CreateLobbyButton from "@shared/components/ui/CreateLobbyButton.tsx";
 import JoinLobbyInput from "@shared/components/ui/JoinLobbyInput.tsx";
-import { useCreateLobby, useJoinLobby } from "@features/lobby";
+import { useCreateLobby, useHomeLobbyError, useJoinLobby } from "@features/lobby";
 
 export default function ThreeCockOnlineLanding() {
   const { createLobby, isCreating, error: createLobbyError } = useCreateLobby();
   const { joinLobby } = useJoinLobby();
+  // Set when a bad/expired lobby code bounced the user back here.
+  const lobbyError = useHomeLobbyError();
+  const error = createLobbyError ?? lobbyError;
 
   return (
     <div className="min-h-screen w-full bg-black text-white flex flex-col">
@@ -72,9 +75,9 @@ export default function ThreeCockOnlineLanding() {
           innerClassName="joti-one-regular block bg-[#f9b658] text-white text-2xl tracking-wide px-16 py-4 transition-colors duration-150 group-hover:bg-white group-hover:!text-black"
         />
 
-        {createLobbyError && (
+        {error && (
           <p className="text-red-400 text-sm mt-3" role="alert">
-            {createLobbyError}
+            {error}
           </p>
         )}
       </main>

@@ -7,7 +7,7 @@ import {
   type LoginResponse,
   type Profile,
 } from '@features/auth'
-import { LOBBY_ENDPOINTS, type CreateLobbyResponse } from '@features/lobby'
+import { LOBBY_ENDPOINTS, type LobbyResponse } from '@features/lobby'
 
 // Default (happy-path) handlers shared by every test. A test that needs a
 // failure overrides one with `server.use()`; the override is reset after each
@@ -23,9 +23,8 @@ export const mockProfile: Profile = {
   avatarUrl: null,
 }
 
-export const mockLobby: CreateLobbyResponse['data'] = {
+export const mockLobby: LobbyResponse['data'] = {
   lobbyCode: 'AB12CD',
-  lobbyUrl: 'https://app.com/lobby/AB12CD',
   hostId: 'host-1',
   maxPlayers: 8,
   players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
@@ -51,7 +50,18 @@ export const handlers = [
     },
   ),
 
-  http.post<never, never, CreateLobbyResponse>(LOBBY_ENDPOINTS.create, () => {
+  http.post<never, never, LobbyResponse>(LOBBY_ENDPOINTS.create, () => {
     return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
   }),
+
+  // Only the mock lobby exists; any other code behaves like an expired one.
+  http.get<{ code: string }, never, LobbyResponse | ApiErrorBody>(
+    LOBBY_ENDPOINTS.detail(':code'),
+    ({ params }) => {
+      if (params.code !== mockLobby.lobbyCode) {
+        return HttpResponse.json({ message: 'Lobby not found' }, { status: 404 })
+      }
+      return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
+    },
+  ),
 ]

@@ -6,7 +6,6 @@ import { useLobbyStore } from './lobbyStore'
 
 const lobby: LobbyData = {
   lobbyCode: 'AB12CD',
-  lobbyUrl: 'https://app.com/lobby/AB12CD',
   hostId: 'host-1',
   maxPlayers: 8,
   players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
