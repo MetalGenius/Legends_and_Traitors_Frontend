@@ -11,13 +11,13 @@ export interface LobbyPlayer {
 
 export interface LobbyData {
   lobbyCode: string
-  lobbyUrl: string
   hostId: string
   maxPlayers: number
   players: LobbyPlayer[]
 }
 
-export interface CreateLobbyResponse {
+/** Envelope shared by both create (POST) and fetch (GET) lobby responses. */
+export interface LobbyResponse {
   status: string
   data: LobbyData
 }

@@ -14,9 +14,9 @@ beforeEach(() => {
   useLobbyStore.getState().clearLobby()
 })
 
-function renderHome() {
+function renderHome(state?: unknown) {
   return render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={[{ pathname: '/', state }]}>
       <Routes>
         <Route path="/" element={<CreateHomeScreen />} />
         <Route path="/lobby/:code" element={<div>Lobby screen</div>} />
@@ -73,5 +73,21 @@ describe('CreateHomeScreen', () => {
 
     await screen.findByRole('alert')
     expect(getButton().disabled).toBe(false)
+  })
+
+  describe('when a bad lobby code bounced the user back here', () => {
+    it('shows the message the redirect carried', () => {
+      renderHome({ lobbyError: 'That lobby code is invalid or has expired.' })
+
+      expect(screen.getByRole('alert').textContent).toBe(
+        'That lobby code is invalid or has expired.',
+      )
+    })
+
+    it('shows nothing when the user arrived normally', () => {
+      renderHome()
+
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
   })
 })

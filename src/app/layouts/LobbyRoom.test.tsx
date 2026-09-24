@@ -1,18 +1,32 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useLobbyStore } from '@features/lobby'
+import { LOBBY_ENDPOINTS, useLobbyStore, type LobbyData } from '@features/lobby'
+import { mockLobby } from '@mocks/handlers'
+import { server } from '@mocks/server'
 
 import LobbyRoom from './LobbyRoom'
 
-function renderLobby(props: Record<string, unknown> = {}) {
+/** Renders the lobby at /lobby/AB12CD, with Home as the redirect target. */
+function renderLobby(props = {}, code = 'AB12CD') {
   return render(
-    <MemoryRouter initialEntries={['/lobby/AB12CD']}>
+    <MemoryRouter initialEntries={[`/lobby/${code}`]}>
       <Routes>
         <Route path="/lobby/:code" element={<LobbyRoom {...props} />} />
+        <Route path="/" element={<div>Home screen</div>} />
       </Routes>
     </MemoryRouter>,
+  )
+}
+
+/** Makes the GET for `code` return this lobby instead of the default. */
+function serveLobby(lobby: LobbyData) {
+  server.use(
+    http.get(LOBBY_ENDPOINTS.detail(':code'), () =>
+      HttpResponse.json({ status: 'SUCCESS', data: lobby }),
+    ),
   )
 }
 
@@ -20,58 +34,59 @@ beforeEach(() => {
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
   })
-  // The lobby store is a module-level singleton shared across tests - reset
-  // it so a previous test's created lobby can't leak into this one.
+  // Module-level singleton shared across tests - reset between them.
   useLobbyStore.getState().clearLobby()
 })
 
 describe('LobbyRoom', () => {
-  it('shows the room code from the URL', () => {
+  it('shows a loading state while the lobby is being fetched', () => {
     renderLobby()
 
-    expect(screen.getByText('AB12CD')).toBeDefined()
+    expect(screen.getByTestId('lobby-loading')).toBeDefined()
   })
 
-  it('shows the player count against maxPlayers', () => {
-    renderLobby({
+  it('shows the fetched lobby once loading finishes', async () => {
+    renderLobby()
+
+    expect(await screen.findByText('AB12CD')).toBeDefined()
+    expect(screen.queryByTestId('lobby-loading')).toBeNull()
+  })
+
+  it('shows the player count from the server, not a placeholder', async () => {
+    serveLobby({
+      ...mockLobby,
       maxPlayers: 6,
       players: [
-        { id: '1', name: 'Arthur' },
-        { id: '2', name: 'Lancelot' },
+        { id: '1', name: 'Arthur', isHost: true, isReady: false },
+        { id: '2', name: 'Lancelot', isHost: false, isReady: true },
       ],
     })
 
-    expect(screen.getByText('Player (2/6)')).toBeDefined()
+    renderLobby()
+
+    expect(await screen.findByText('Player (2/6)')).toBeDefined()
   })
 
-  it("renders each player's name", () => {
-    renderLobby({
+  it("renders a card per player, with the host's crown", async () => {
+    serveLobby({
+      ...mockLobby,
       players: [
-        { id: '1', name: 'Arthur' },
-        { id: '2', name: 'Lancelot' },
+        { id: '1', name: 'Arthur', isHost: true, isReady: false },
+        { id: '2', name: 'Lancelot', isHost: false, isReady: true },
       ],
     })
 
-    expect(screen.getByText('Arthur')).toBeDefined()
+    renderLobby()
+
+    expect(await screen.findByText('Arthur')).toBeDefined()
     expect(screen.getByText('Lancelot')).toBeDefined()
-  })
-
-  it('shows the crown only on the host', () => {
-    renderLobby({
-      players: [
-        { id: '1', name: 'Arthur', isHost: true },
-        { id: '2', name: 'Lancelot' },
-      ],
-    })
-
     expect(screen.getAllByTestId('host-crown')).toHaveLength(1)
   })
 
-  it('copies the invite link and shows confirmation', async () => {
+  it("copies an invite link built from this app's own origin", async () => {
     renderLobby()
 
-    const inviteButton = screen.getByTitle('Click to copy invite link')
-    fireEvent.click(inviteButton)
+    fireEvent.click(await screen.findByTitle('Click to copy invite link'))
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
       `${window.location.origin}/lobby/AB12CD`,
@@ -79,62 +94,63 @@ describe('LobbyRoom', () => {
     expect(await screen.findByText('Copied!')).toBeDefined()
   })
 
-  it("copies this app's own origin, not the server's lobbyUrl domain", async () => {
-    useLobbyStore.getState().setLobby({
-      lobbyCode: 'AB12CD',
-      lobbyUrl: 'https://app.com/lobby/AB12CD',
-      hostId: 'host-1',
-      maxPlayers: 8,
-      players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
-    })
-
-    renderLobby()
-
-    fireEvent.click(screen.getByTitle('Click to copy invite link'))
-
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      `${window.location.origin}/lobby/AB12CD`,
-    )
-  })
-
-  it('calls onStartGame when Start Game is clicked', () => {
+  it('calls onStartGame when Start Game is clicked', async () => {
     const onStartGame = vi.fn()
     renderLobby({ onStartGame })
 
-    fireEvent.click(screen.getByText('Start Game'))
+    fireEvent.click(await screen.findByText('Start Game'))
 
     expect(onStartGame).toHaveBeenCalledTimes(1)
   })
 
-  it('calls onLeaveGame when Leave Game is clicked', () => {
+  it('calls onLeaveGame when Leave Game is clicked', async () => {
     const onLeaveGame = vi.fn()
     renderLobby({ onLeaveGame })
 
-    fireEvent.click(screen.getByText('Leave Game'))
+    fireEvent.click(await screen.findByText('Leave Game'))
 
     expect(onLeaveGame).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the real lobby from the store instead of the prop defaults, when one exists', () => {
-    useLobbyStore.getState().setLobby({
-      lobbyCode: 'AB12CD',
-      lobbyUrl: 'https://app.com/lobby/AB12CD',
-      hostId: 'host-1',
-      maxPlayers: 8,
-      players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
+  describe('when the lobby cannot be loaded', () => {
+    it('redirects Home on a 404 instead of staying stuck loading', async () => {
+      // ZZ99ZZ isn't the mock lobby, so the default handler 404s it.
+      renderLobby({}, 'ZZ99ZZ')
+
+      expect(await screen.findByText('Home screen')).toBeDefined()
+      expect(screen.queryByTestId('lobby-loading')).toBeNull()
     })
 
-    // Passed props should be ignored once the store has real data.
-    renderLobby({
-      maxPlayers: 10,
-      players: [
-        { id: '1', name: 'Player 1' },
-        { id: '2', name: 'Player 1' },
-      ],
+    it('redirects Home on a network failure too', async () => {
+      server.use(http.get(LOBBY_ENDPOINTS.detail(':code'), () => HttpResponse.error()))
+
+      renderLobby()
+
+      expect(await screen.findByText('Home screen')).toBeDefined()
+      expect(screen.queryByTestId('lobby-loading')).toBeNull()
     })
 
-    expect(screen.getByText('Player (1/8)')).toBeDefined()
-    expect(screen.getByText('HostName')).toBeDefined()
-    expect(screen.queryByText('Player 1')).toBeNull()
+    it('redirects Home on a server error too', async () => {
+      server.use(
+        http.get(LOBBY_ENDPOINTS.detail(':code'), () =>
+          HttpResponse.json({ message: 'Boom' }, { status: 500 }),
+        ),
+      )
+
+      renderLobby()
+
+      expect(await screen.findByText('Home screen')).toBeDefined()
+    })
+
+    it('leaves no stale lobby behind in the store', async () => {
+      useLobbyStore.getState().setLobby(mockLobby)
+
+      renderLobby({}, 'ZZ99ZZ')
+
+      await screen.findByText('Home screen')
+      await waitFor(() => {
+        expect(useLobbyStore.getState().lobby).toBeNull()
+      })
+    })
   })
 })
