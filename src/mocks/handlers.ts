@@ -30,6 +30,34 @@ export const mockLobby: LobbyResponse['data'] = {
   players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
 }
 
+/** mockLobby after a second (non-host) player has joined it. */
+export const mockJoinedLobby: LobbyResponse['data'] = {
+  ...mockLobby,
+  players: [
+    ...mockLobby.players,
+    { id: 'player-2', name: 'Guinevere', isHost: false, isReady: false },
+  ],
+}
+
+/** A lobby with every seat taken - joining it returns a 409. */
+export const mockFullLobby: LobbyResponse['data'] = {
+  lobbyCode: 'FULL01',
+  hostId: 'full-host',
+  maxPlayers: 4,
+  players: [
+    { id: 'full-host', name: 'Lancelot', isHost: true, isReady: true },
+    { id: 'full-2', name: 'Gawain', isHost: false, isReady: true },
+    { id: 'full-3', name: 'Percival', isHost: false, isReady: false },
+    { id: 'full-4', name: 'Galahad', isHost: false, isReady: true },
+  ],
+}
+
+const mockLobbies = [mockLobby, mockFullLobby]
+
+function findMockLobby(code: string) {
+  return mockLobbies.find((lobby) => lobby.lobbyCode === code)
+}
+
 export const handlers = [
   http.post<never, LoginCredentials, LoginResponse>(
     AUTH_ENDPOINTS.login,
@@ -54,14 +82,30 @@ export const handlers = [
     return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
   }),
 
-  // Only the mock lobby exists; any other code behaves like an expired one.
+  // Only the mock lobbies exist; any other code behaves like an expired one.
   http.get<{ code: string }, never, LobbyResponse | ApiErrorBody>(
     LOBBY_ENDPOINTS.detail(':code'),
     ({ params }) => {
-      if (params.code !== mockLobby.lobbyCode) {
+      const lobby = findMockLobby(params.code)
+      if (!lobby) {
         return HttpResponse.json({ message: 'Lobby not found' }, { status: 404 })
       }
-      return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
+      return HttpResponse.json({ status: 'SUCCESS', data: lobby })
+    },
+  ),
+
+  // AB12CD can be joined; FULL01 has no free seat; anything else is gone.
+  http.post<{ code: string }, never, LobbyResponse | ApiErrorBody>(
+    LOBBY_ENDPOINTS.join(':code'),
+    ({ params }) => {
+      const lobby = findMockLobby(params.code)
+      if (!lobby) {
+        return HttpResponse.json({ message: 'Lobby not found' }, { status: 404 })
+      }
+      if (lobby.players.length >= lobby.maxPlayers) {
+        return HttpResponse.json({ message: 'Lobby is full' }, { status: 409 })
+      }
+      return HttpResponse.json({ status: 'SUCCESS', data: mockJoinedLobby })
     },
   ),
 ]

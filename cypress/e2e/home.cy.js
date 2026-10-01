@@ -1,7 +1,7 @@
 /**
  * Cypress runs against `npm run preview` - the production build, where MSW is
  * deliberately disabled. Every API call therefore has to be stubbed here with
- * cy.intercept, including the GET the waiting room fires on mount.
+ * cy.intercept, including the GET (or join POST) the waiting room fires on mount.
  */
 function lobby(code, overrides = {}) {
   return {
@@ -76,16 +76,44 @@ describe('Home screen', () => {
     cy.get('[data-testid="create-lobby-button"]').should('not.be.disabled')
   })
 
-  it('joins a lobby by code and lands in that room', () => {
-    cy.intercept('GET', '/api/lobby/ABC123', { body: lobby('ABC123') }).as('getLobby')
+  it('joins a lobby by code, waiting in the room until the join succeeds', () => {
+    // Delayed so the waiting room's joining state is observable.
+    cy.intercept('POST', '/api/lobby/ABC123/join', (req) =>
+      req.reply({
+        delay: 500,
+        body: lobby('ABC123', {
+          players: [
+            { id: 'host-1', name: 'HostName', isHost: true, isReady: false },
+            { id: 'player-2', name: 'Guinevere', isHost: false, isReady: false },
+          ],
+        }),
+      }),
+    ).as('joinLobby')
 
     cy.get('[data-testid="join-lobby-input"]').type('ABC123')
     cy.get('[data-testid="join-lobby-submit"]').click()
-    cy.wait('@getLobby')
 
     cy.url().should('include', '/lobby/ABC123')
+    cy.get('[data-testid="lobby-loading"]').should('contain', 'Joining lobby')
+    cy.wait('@joinLobby')
+
+    cy.get('[data-testid="lobby-loading"]').should('not.exist')
     cy.contains('ABC123').should('be.visible')
-    cy.contains('HostName').should('be.visible')
+    cy.contains('Guinevere').should('be.visible')
+  })
+
+  it('bounces back Home with an explanation when the lobby is full', () => {
+    cy.intercept('POST', '/api/lobby/ABC123/join', {
+      statusCode: 409,
+      body: { message: 'Lobby is full' },
+    }).as('joinLobby')
+
+    cy.get('[data-testid="join-lobby-input"]').type('ABC123')
+    cy.get('[data-testid="join-lobby-submit"]').click()
+    cy.wait('@joinLobby')
+
+    cy.url().should('not.include', '/lobby/')
+    cy.contains('That lobby is full.').should('be.visible')
   })
 })
 

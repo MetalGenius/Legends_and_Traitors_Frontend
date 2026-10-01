@@ -21,7 +21,7 @@ export default function LobbyScreen({
 }: LobbyScreenProps) {
   const { code } = useParams<{ code?: string }>();
   // Loads the lobby into the store, or redirects Home if the code is bad.
-  const { isLoading } = useLobbyState(code);
+  const { isLoading, isJoining } = useLobbyState(code);
   const lobby = useLobbyStore((state) => state.lobby);
 
   const lobbyCode = lobby?.lobbyCode ?? code ?? "";
@@ -56,7 +56,7 @@ export default function LobbyScreen({
             className="text-3xl"
             style={{ fontFamily: "Instrument Serif, serif" }}
           >
-            Loading lobby...
+            {isJoining ? "Joining lobby..." : "Loading lobby..."}
           </p>
         ) : (
           <div className="w-full max-w-5xl">

@@ -3,6 +3,7 @@ import type { ApiErrorBody, LobbyResponse } from '@features/lobby/types/lobby'
 export const LOBBY_ENDPOINTS = {
   create: '/api/lobby',
   detail: (code: string) => `/api/lobby/${code}`,
+  join: (code: string) => `/api/lobby/${code}/join`,
 } as const
 
 /** A request that reached the server and came back with a non-2xx status. */
@@ -57,4 +58,13 @@ export function createLobby(): Promise<LobbyResponse> {
 /** Current state of an existing lobby. Throws a 404 ApiError if it's gone. */
 export function getLobbyState(code: string): Promise<LobbyResponse> {
   return request<LobbyResponse>(LOBBY_ENDPOINTS.detail(code))
+}
+
+/**
+ * Adds the current user to an existing lobby and returns its updated state.
+ * Throws an ApiError with 404 if the lobby is gone, 409 if it's full, and
+ * 400 if its game has already started.
+ */
+export function joinLobby(code: string): Promise<LobbyResponse> {
+  return request<LobbyResponse>(LOBBY_ENDPOINTS.join(code), { method: 'POST' })
 }

@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LOBBY_ENDPOINTS, useLobbyStore, type LobbyData } from '@features/lobby'
-import { mockLobby } from '@mocks/handlers'
+import { mockJoinedLobby, mockLobby } from '@mocks/handlers'
 import { server } from '@mocks/server'
 
 import LobbyRoom from './LobbyRoom'
@@ -36,6 +36,7 @@ beforeEach(() => {
   })
   // Module-level singleton shared across tests - reset between them.
   useLobbyStore.getState().clearLobby()
+  useLobbyStore.getState().clearPendingJoin()
 })
 
 describe('LobbyRoom', () => {
@@ -43,6 +44,17 @@ describe('LobbyRoom', () => {
     renderLobby()
 
     expect(screen.getByTestId('lobby-loading')).toBeDefined()
+  })
+
+  it('shows a joining state until the join succeeds, then the joined players', async () => {
+    const request = Promise.resolve({ status: 'SUCCESS', data: mockJoinedLobby })
+    useLobbyStore.getState().setPendingJoin({ code: 'AB12CD', request })
+
+    renderLobby()
+
+    expect(screen.getByTestId('lobby-loading').textContent).toBe('Joining lobby...')
+    expect(await screen.findByText('Guinevere')).toBeDefined()
+    expect(screen.queryByTestId('lobby-loading')).toBeNull()
   })
 
   it('shows the fetched lobby once loading finishes', async () => {
