@@ -16,21 +16,14 @@ function lobby(code, overrides = {}) {
   }
 }
 
-// Nobody logs in during these specs, so the app asks for a guest account on
-// every load. Cypress clears localStorage between tests, so it's a fresh one.
+// Nobody logs in during these specs, and Cypress clears localStorage between
+// tests, so every join is a first join: the server creates a guest account
+// and returns it alongside the lobby.
 const guest = { id: 'guest-92117', username: 'guest_92117', displayName: 'Guest92117' }
-
-function stubGuest() {
-  cy.intercept('POST', '/api/auth/guest', {
-    body: { token: 'guest-token', user: guest },
-  }).as('createGuest')
-}
 
 describe('Home screen', () => {
   beforeEach(() => {
-    stubGuest()
     cy.visit('/')
-    cy.wait('@createGuest')
   })
 
   it('renders the landing content', () => {
@@ -91,16 +84,19 @@ describe('Home screen', () => {
   it('joins a lobby by code, waiting in the room until the join succeeds', () => {
     // Delayed so the waiting room's joining state is observable.
     cy.intercept('POST', '/api/lobby/ABC123/join', (req) => {
-      // The server knows who's joining from the guest token.
-      expect(req.headers.authorization).to.equal('Bearer guest-token')
+      // No account yet, so no token - this join is what creates the guest.
+      expect(req.headers).not.to.have.property('authorization')
       req.reply({
         delay: 500,
-        body: lobby('ABC123', {
-          players: [
-            { id: 'host-1', username: 'HostName', isHost: true, isReady: false },
-            { id: guest.id, username: guest.displayName, isHost: false, isReady: false },
-          ],
-        }),
+        body: {
+          ...lobby('ABC123', {
+            players: [
+              { id: 'host-1', username: 'HostName', isHost: true, isReady: false },
+              { id: guest.id, username: guest.displayName, isHost: false, isReady: false },
+            ],
+          }),
+          guest: { token: 'guest-token', user: guest },
+        },
       })
     }).as('joinLobby')
 
@@ -115,8 +111,12 @@ describe('Home screen', () => {
     cy.contains('ABC123').should('be.visible')
     cy.contains('HostName').should('be.visible')
     cy.contains('Player (2/8)').should('be.visible')
-    // Header shows the account's display name, not its username handle.
+    // Header shows the new guest's display name, not its username handle.
     cy.get('[data-testid="header-display-name"]').should('have.text', guest.displayName)
+    cy.window()
+      .its('localStorage')
+      .invoke('getItem', 'lt-session')
+      .should('contain', 'guest-token')
   })
 
   it('bounces back Home with an explanation when the lobby is full', () => {
@@ -135,10 +135,6 @@ describe('Home screen', () => {
 })
 
 describe('Lobby waiting room', () => {
-  beforeEach(() => {
-    stubGuest()
-  })
-
   it('shows a loading state before the lobby arrives', () => {
     cy.intercept('GET', '/api/lobby/AB12CD', (req) =>
       req.reply({ delay: 500, body: lobby('AB12CD') }),

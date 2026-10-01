@@ -1,10 +1,10 @@
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 
-import { mockGuest, mockGuestToken, mockProfile, mockToken } from '@mocks/handlers'
+import { mockProfile, mockToken } from '@mocks/handlers'
 import { server } from '@mocks/server'
 
-import { ApiError, AUTH_ENDPOINTS, createGuest, getProfile, login } from './authService'
+import { ApiError, AUTH_ENDPOINTS, getProfile, login } from './authService'
 
 describe('authService', () => {
   describe('with the default handlers', () => {
@@ -23,13 +23,6 @@ describe('authService', () => {
 
     it('fetches the profile with a bearer token', async () => {
       await expect(getProfile(mockToken)).resolves.toEqual(mockProfile)
-    })
-
-    it('creates a guest account with its own token', async () => {
-      await expect(createGuest()).resolves.toEqual({
-        token: mockGuestToken,
-        user: mockGuest,
-      })
     })
 
     it('rejects with a 401 ApiError when the token is wrong', async () => {
@@ -54,19 +47,6 @@ describe('authService', () => {
 
       expect(error).toBeInstanceOf(ApiError)
       expect(error).toMatchObject({ status: 401, message: 'Invalid email or password' })
-    })
-
-    it('rejects with an ApiError when the guest account cannot be created', async () => {
-      server.use(
-        http.post(AUTH_ENDPOINTS.guest, () =>
-          HttpResponse.json({ message: 'Too many guests' }, { status: 503 }),
-        ),
-      )
-
-      const error = await createGuest().catch((e: unknown) => e)
-
-      expect(error).toBeInstanceOf(ApiError)
-      expect(error).toMatchObject({ status: 503, message: 'Too many guests' })
     })
 
     it('falls back to a generic message when the error body is not JSON', async () => {

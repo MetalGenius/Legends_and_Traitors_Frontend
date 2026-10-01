@@ -3,13 +3,17 @@ import { http, HttpResponse } from 'msw'
 import {
   AUTH_ENDPOINTS,
   type ApiErrorBody,
-  type GuestResponse,
-  type GuestUser,
   type LoginCredentials,
   type LoginResponse,
   type Profile,
 } from '@features/auth'
-import { LOBBY_ENDPOINTS, type LobbyPlayer, type LobbyResponse } from '@features/lobby'
+import {
+  LOBBY_ENDPOINTS,
+  type GuestAccount,
+  type JoinLobbyResponse,
+  type LobbyPlayer,
+  type LobbyResponse,
+} from '@features/lobby'
 import type { SessionAccount } from '@shared/lib/session'
 
 // Default (happy-path) handlers shared by every test. A test that needs a
@@ -28,28 +32,28 @@ export const mockProfile: Profile = {
 
 export const mockGuestToken = 'mock-guest-token'
 
-/** The account POST /api/auth/guest hands out when no one is logged in. */
-export const mockGuest: GuestUser = {
+/** The guest account a join without a token creates. */
+export const mockGuest: GuestAccount['user'] = {
   id: 'guest-92117',
   username: 'guest_92117',
   displayName: 'Guest92117',
 }
 
-/** mockGuest as the app stores it once the guest request has landed. */
+/** mockGuest as the app stores it after that first join. */
 export const mockGuestSession: { token: string; account: SessionAccount } = {
   token: mockGuestToken,
   account: { ...mockGuest, isGuest: true },
 }
 
-/** Who a request's bearer token belongs to, as a lobby player - or null. */
-function playerFromToken(request: Request): LobbyPlayer | null {
-  const auth = request.headers.get('Authorization')
-  const account =
-    auth === `Bearer ${mockGuestToken}` ? mockGuest
-    : auth === `Bearer ${mockToken}` ? mockProfile
-    : null
-  if (!account) return null
-  // The lobby shows players by display name, never their username handle.
+/** The account a request's bearer token belongs to, or null if unknown. */
+function accountFromToken(auth: string) {
+  if (auth === `Bearer ${mockGuestToken}`) return mockGuest
+  if (auth === `Bearer ${mockToken}`) return mockProfile
+  return null
+}
+
+/** The lobby shows players by display name, never their username handle. */
+function asPlayer(account: { id: string; displayName: string }): LobbyPlayer {
   return { id: account.id, username: account.displayName, isHost: false, isReady: false }
 }
 
@@ -108,11 +112,6 @@ export const handlers = [
     },
   ),
 
-  // No login, no token: the app asks for a guest account on first load.
-  http.post<never, never, GuestResponse>(AUTH_ENDPOINTS.guest, () => {
-    return HttpResponse.json({ token: mockGuestToken, user: mockGuest })
-  }),
-
   http.post<never, never, LobbyResponse>(LOBBY_ENDPOINTS.create, () => {
     return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
   }),
@@ -130,12 +129,14 @@ export const handlers = [
   ),
 
   // AB12CD can be joined; FULL01 has no free seat; anything else is gone.
-  // The joiner is whoever the bearer token belongs to (guest or logged in).
-  http.post<{ code: string }, never, LobbyResponse | ApiErrorBody>(
+  // The joiner is whoever the bearer token belongs to. With no token at all,
+  // the server creates a guest account and hands it back alongside the lobby.
+  http.post<{ code: string }, never, JoinLobbyResponse | ApiErrorBody>(
     LOBBY_ENDPOINTS.join(':code'),
     ({ params, request }) => {
-      const player = playerFromToken(request)
-      if (!player) {
+      const auth = request.headers.get('Authorization')
+      const account = auth ? accountFromToken(auth) : mockGuest
+      if (!account) {
         return HttpResponse.json({ message: 'Unauthorized' }, { status: 401 })
       }
       const lobby = findMockLobby(params.code)
@@ -147,7 +148,8 @@ export const handlers = [
       }
       return HttpResponse.json({
         status: 'SUCCESS',
-        data: { ...lobby, players: [...lobby.players, player] },
+        data: { ...lobby, players: [...lobby.players, asPlayer(account)] },
+        ...(auth ? {} : { guest: { token: mockGuestToken, user: mockGuest } }),
       })
     },
   ),

@@ -1,5 +1,9 @@
-import type { ApiErrorBody, LobbyResponse } from '@features/lobby/types/lobby'
-import { getAuthHeaders } from '@shared/lib/session'
+import type {
+  ApiErrorBody,
+  JoinLobbyResponse,
+  LobbyResponse,
+} from '@features/lobby/types/lobby'
+import { authHeaders } from '@shared/lib/session'
 
 export const LOBBY_ENDPOINTS = {
   create: '/api/lobby',
@@ -34,14 +38,12 @@ async function readErrorMessage(response: Response): Promise<string> {
  * came back non-2xx. Callers rely on that distinction for their messaging.
  */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  // The server identifies the player from this token (a guest one if they
-  // haven't logged in), so it's sent on every lobby call.
-  const authHeaders = await getAuthHeaders()
   let response: Response
   try {
     response = await fetch(path, {
       ...init,
-      headers: { Accept: 'application/json', ...authHeaders, ...init?.headers },
+      // Identifies the player; absent until they've logged in or joined once.
+      headers: { Accept: 'application/json', ...authHeaders(), ...init?.headers },
     })
   } catch {
     throw new Error('Network error: could not reach the server.')
@@ -65,10 +67,11 @@ export function getLobbyState(code: string): Promise<LobbyResponse> {
 }
 
 /**
- * Adds the current user to an existing lobby and returns its updated state.
- * Throws an ApiError with 404 if the lobby is gone, 409 if it's full, and
- * 400 if its game has already started.
+ * Adds the current player to an existing lobby and returns its updated state.
+ * Sent without a token, the server creates a guest account for the player and
+ * returns it as `guest`. Throws an ApiError with 404 if the lobby is gone,
+ * 409 if it's full, and 400 if its game has already started.
  */
-export function joinLobby(code: string): Promise<LobbyResponse> {
-  return request<LobbyResponse>(LOBBY_ENDPOINTS.join(code), { method: 'POST' })
+export function joinLobby(code: string): Promise<JoinLobbyResponse> {
+  return request<JoinLobbyResponse>(LOBBY_ENDPOINTS.join(code), { method: 'POST' })
 }

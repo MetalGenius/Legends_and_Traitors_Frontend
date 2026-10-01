@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { getAuthHeaders, trackPendingSession, useSessionStore } from './session'
+import { authHeaders, useSessionStore } from './session'
 
 const account = {
   id: 'guest-1',
@@ -13,37 +13,28 @@ beforeEach(() => {
   useSessionStore.getState().clearSession()
 })
 
-describe('getAuthHeaders', () => {
-  it('returns a bearer header for the current token', async () => {
+describe('session', () => {
+  it('starts with no session', () => {
+    expect(useSessionStore.getState().token).toBeNull()
+    expect(useSessionStore.getState().account).toBeNull()
+  })
+
+  it('persists the session so a reload keeps the same account', () => {
     useSessionStore.getState().setSession('abc', account)
 
-    await expect(getAuthHeaders()).resolves.toEqual({ Authorization: 'Bearer abc' })
+    const stored = JSON.parse(localStorage.getItem('lt-session') ?? '{}')
+    expect(stored.state).toEqual({ token: 'abc', account })
+  })
+})
+
+describe('authHeaders', () => {
+  it('returns a bearer header for the current token', () => {
+    useSessionStore.getState().setSession('abc', account)
+
+    expect(authHeaders()).toEqual({ Authorization: 'Bearer abc' })
   })
 
-  it('returns no header when there is no session', async () => {
-    await expect(getAuthHeaders()).resolves.toEqual({})
-  })
-
-  it('waits for a session that is still being created', async () => {
-    let finish!: () => void
-    const pending = new Promise<void>((resolve) => {
-      finish = () => {
-        useSessionStore.getState().setSession('late-token', account)
-        resolve()
-      }
-    })
-    trackPendingSession(pending)
-
-    const headers = getAuthHeaders()
-    finish()
-
-    await expect(headers).resolves.toEqual({ Authorization: 'Bearer late-token' })
-  })
-
-  it('still resolves (without a token) when the pending session fails', async () => {
-    const failed = Promise.reject(new Error('no guest for you'))
-    trackPendingSession(failed)
-
-    await expect(getAuthHeaders()).resolves.toEqual({})
+  it('returns no header when there is no session', () => {
+    expect(authHeaders()).toEqual({})
   })
 })

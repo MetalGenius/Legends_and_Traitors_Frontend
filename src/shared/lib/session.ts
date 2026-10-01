@@ -2,9 +2,9 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
 /**
- * Who the app is acting as - a signed-in user or a server-issued guest.
- * Shared rather than owned by `auth`: auth writes it, and every feature that
- * talks to the API reads the token from it.
+ * Who the app is acting as - a signed-in user, or the guest the server
+ * created when they first joined a lobby without one. Shared rather than
+ * owned by a feature: any feature that talks to the API reads the token here.
  */
 export interface SessionAccount {
   id: string
@@ -39,22 +39,8 @@ export const useSessionStore = create<SessionState>()(
   ),
 )
 
-// A session being created right now (e.g. the guest request on first load).
-// Requests wait on it so an early click doesn't go out without a token.
-let pendingSession: Promise<unknown> | null = null
-
-export function trackPendingSession(request: Promise<unknown>) {
-  pendingSession = request
-  request
-    .finally(() => {
-      if (pendingSession === request) pendingSession = null
-    })
-    .catch(() => {})
-}
-
-/** Bearer header for the current session, once any pending one has settled. */
-export async function getAuthHeaders(): Promise<Record<string, string>> {
-  if (pendingSession) await pendingSession.catch(() => {})
+/** Bearer header for the current session, or nothing without one. */
+export function authHeaders(): Record<string, string> {
   const { token } = useSessionStore.getState()
   return token ? { Authorization: `Bearer ${token}` } : {}
 }

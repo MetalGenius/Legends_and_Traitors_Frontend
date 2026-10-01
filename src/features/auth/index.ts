@@ -5,12 +5,9 @@
  * exported from this file is private to the feature - deep imports such as
  * `@features/auth/components/Foo` are a convention violation.
  */
-export { ApiError, AUTH_ENDPOINTS, createGuest, getProfile, login } from './api/authService'
-export { useGuestSession } from './hooks/useGuestSession'
+export { ApiError, AUTH_ENDPOINTS, getProfile, login } from './api/authService'
 export type {
   ApiErrorBody,
-  GuestResponse,
-  GuestUser,
   LoginCredentials,
   LoginResponse,
   Profile,

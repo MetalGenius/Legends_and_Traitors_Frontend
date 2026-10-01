@@ -1,7 +1,6 @@
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest'
 
-import { mockGuestSession } from '@mocks/handlers'
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
 
@@ -9,12 +8,10 @@ import { useSessionStore } from '@shared/lib/session'
 // of silently attempting a real network call.
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 
-// The app always starts a guest session before anything else runs (see
-// AppProviders), so tests start as that guest too. Tests about the no-token
-// path clear it themselves.
+// Every test starts as a first-time visitor: no token until they log in or
+// join a lobby (which creates a guest). The store is a module singleton.
 beforeEach(() => {
-  const { token, account } = mockGuestSession
-  useSessionStore.getState().setSession(token, account)
+  useSessionStore.getState().clearSession()
 })
 
 afterEach(() => {

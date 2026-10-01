@@ -17,4 +17,10 @@ export { default as PlayerListItem } from './components/PlayerListItem'
 export { useLobbyStore } from './stores/lobbyStore'
 export { usePlayerStore } from './stores/playerStore'
 export { LOBBY_ENDPOINTS } from './api/lobbyApi'
-export type { LobbyData, LobbyPlayer, LobbyResponse } from './types/lobby'
+export type {
+  GuestAccount,
+  JoinLobbyResponse,
+  LobbyData,
+  LobbyPlayer,
+  LobbyResponse,
+} from './types/lobby'

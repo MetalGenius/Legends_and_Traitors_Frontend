@@ -9,7 +9,7 @@ import {
   usePlayerStore,
   type LobbyData,
 } from '@features/lobby'
-import { mockGuest, mockJoinedLobby, mockLobby } from '@mocks/handlers'
+import { mockGuest, mockGuestSession, mockJoinedLobby, mockLobby } from '@mocks/handlers'
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
 
@@ -135,6 +135,11 @@ describe('LobbyRoom', () => {
   })
 
   describe('header name', () => {
+    beforeEach(() => {
+      const { token, account } = mockGuestSession
+      useSessionStore.getState().setSession(token, account)
+    })
+
     it("shows the account's display name, not its username", async () => {
       renderLobby()
 

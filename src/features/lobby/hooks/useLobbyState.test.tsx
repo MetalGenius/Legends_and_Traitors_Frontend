@@ -7,8 +7,15 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { joinLobby, LOBBY_ENDPOINTS } from '@features/lobby/api/lobbyApi'
 import { useLobbyStore } from '@features/lobby/stores/lobbyStore'
 import { usePlayerStore } from '@features/lobby/stores/playerStore'
-import { mockFullLobby, mockGuest, mockJoinedLobby, mockLobby } from '@mocks/handlers'
+import {
+  mockFullLobby,
+  mockGuest,
+  mockGuestSession,
+  mockJoinedLobby,
+  mockLobby,
+} from '@mocks/handlers'
 import { server } from '@mocks/server'
+import { useSessionStore } from '@shared/lib/session'
 
 import {
   GAME_STARTED_MESSAGE,
@@ -189,6 +196,9 @@ describe('useLobbyState', () => {
     })
 
     it("stores our player's username as the player display name", async () => {
+      // As useJoinLobby leaves it once a join has handed back our guest account.
+      const { token, account } = mockGuestSession
+      useSessionStore.getState().setSession(token, account)
       startJoin()
 
       const { result } = renderHook(() => useLobbyState('AB12CD'), { wrapper })

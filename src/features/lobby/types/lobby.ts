@@ -24,6 +24,25 @@ export interface LobbyResponse {
   data: LobbyData
 }
 
+/** Account the server mints for a player who joins without a token. */
+export interface GuestAccount {
+  token: string
+  user: {
+    id: string
+    /** Unique handle - not for display. */
+    username: string
+    displayName: string
+  }
+}
+
+/**
+ * Join returns the lobby plus, when the request carried no token, the guest
+ * account the server just created for this player.
+ */
+export interface JoinLobbyResponse extends LobbyResponse {
+  guest?: GuestAccount
+}
+
 /** Body the API returns alongside a non-2xx status. */
 export interface ApiErrorBody {
   message?: string

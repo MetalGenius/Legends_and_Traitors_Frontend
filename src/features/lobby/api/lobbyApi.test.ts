@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   mockFullLobby,
+  mockGuest,
+  mockGuestSession,
   mockGuestToken,
   mockJoinedLobby,
   mockLobby,
@@ -126,6 +128,22 @@ describe('lobbyApi.joinLobby', () => {
     expect(result.data).toEqual(mockJoinedLobby)
   })
 
+  it('returns the guest account it created when joining without a token', async () => {
+    const result = await joinLobby(mockLobby.lobbyCode)
+
+    expect(result.guest).toEqual({ token: mockGuestToken, user: mockGuest })
+  })
+
+  it('returns no guest account when the player already has a token', async () => {
+    const { token, account } = mockGuestSession
+    useSessionStore.getState().setSession(token, account)
+
+    const result = await joinLobby(mockLobby.lobbyCode)
+
+    expect(result.guest).toBeUndefined()
+    expect(result.data).toEqual(mockJoinedLobby)
+  })
+
   it('throws a 404 ApiError for a lobby that is gone or never existed', async () => {
     const error = await joinLobby('ZZ99ZZ').catch((e: unknown) => e)
 
@@ -164,8 +182,8 @@ describe('lobbyApi.joinLobby', () => {
     })
   })
 
-  it('throws a 401 ApiError when there is no session at all', async () => {
-    useSessionStore.getState().clearSession()
+  it('throws a 401 ApiError for a token the server does not recognise', async () => {
+    useSessionStore.getState().setSession('stale-token', mockGuestSession.account)
 
     const error = await joinLobby(mockLobby.lobbyCode).catch((e: unknown) => e)
 
@@ -190,6 +208,8 @@ describe('lobbyApi.joinLobby', () => {
 
 describe('lobby requests', () => {
   it("send the session's bearer token", async () => {
+    const { token, account } = mockGuestSession
+    useSessionStore.getState().setSession(token, account)
     let authorization: string | null = null
     server.use(
       http.get(LOBBY_ENDPOINTS.detail(':code'), ({ request }) => {
@@ -204,7 +224,6 @@ describe('lobby requests', () => {
   })
 
   it('send no Authorization header without a session', async () => {
-    useSessionStore.getState().clearSession()
     let hasAuthorization = true
     server.use(
       http.post(LOBBY_ENDPOINTS.create, ({ request }) => {
