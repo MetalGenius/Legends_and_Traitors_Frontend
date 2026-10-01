@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { LOBBY_ENDPOINTS, useLobbyStore, usePlayerStore } from '@features/lobby'
-import { mockGuest, mockGuestToken } from '@mocks/handlers'
+import { mockGuest, mockGuestToken, mockHost } from '@mocks/handlers'
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
 
@@ -95,8 +95,8 @@ describe('CreateHomeScreen', () => {
     })
   })
 
-  describe('joining for the first time, with no account yet', () => {
-    it('becomes the guest the join created, shown by display name', async () => {
+  describe('through to the real waiting room', () => {
+    function renderApp() {
       render(
         <MemoryRouter initialEntries={['/']}>
           <Routes>
@@ -105,6 +105,47 @@ describe('CreateHomeScreen', () => {
           </Routes>
         </MemoryRouter>,
       )
+    }
+
+    /** Lobby requests sent, in order - still answered by the defaults. */
+    function recordRequests() {
+      const sent: string[] = []
+      server.events.removeAllListeners()
+      server.events.on('request:start', ({ request }) => {
+        const { pathname } = new URL(request.url)
+        if (pathname.startsWith('/api/lobby')) sent.push(`${request.method} ${pathname}`)
+      })
+      return sent
+    }
+
+    it('a creator lands in their lobby as its host, without joining it again', async () => {
+      const sent = recordRequests()
+      renderApp()
+
+      await act(async () => {
+        fireEvent.click(getButton())
+      })
+
+      expect(await screen.findByText('Player (1/8)')).toBeDefined()
+      expect(screen.getByTestId('header-display-name').textContent).toBe(mockHost.displayName)
+      expect(sent).toEqual(['POST /api/lobby', 'GET /api/lobby/AB12CD'])
+      server.events.removeAllListeners()
+    })
+
+    it("a refused join lands back on Home showing the server's message", async () => {
+      renderApp()
+
+      fireEvent.change(screen.getByTestId('join-lobby-input'), {
+        target: { value: 'FULL01' },
+      })
+      fireEvent.click(screen.getByTestId('join-lobby-submit'))
+
+      expect((await screen.findByRole('alert')).textContent).toBe('Lobby is full')
+      expect(screen.getByTestId('join-lobby-input')).toBeDefined()
+    })
+
+    it('a first-time joiner becomes the guest the join created, shown by display name', async () => {
+      renderApp()
 
       fireEvent.change(screen.getByTestId('join-lobby-input'), {
         target: { value: 'AB12CD' },

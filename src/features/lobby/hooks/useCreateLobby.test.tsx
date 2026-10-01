@@ -5,7 +5,9 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
 import { LOBBY_ENDPOINTS } from '@features/lobby'
+import { mockGuestSession, mockHostSession } from '@mocks/handlers'
 import { server } from '@mocks/server'
+import { useSessionStore } from '@shared/lib/session'
 
 import { useCreateLobby } from './useCreateLobby'
 
@@ -30,6 +32,30 @@ describe('useCreateLobby', () => {
 
     expect(result.current.isCreating).toBe(false)
     expect(result.current.error).toBeNull()
+  })
+
+  it("keeps the guest account the server made for a host with no token", async () => {
+    const { result } = renderHook(() => useCreateLobby(), { wrapper })
+
+    await act(async () => {
+      await result.current.createLobby()
+    })
+
+    expect(useSessionStore.getState().token).toBe(mockHostSession.token)
+    expect(useSessionStore.getState().account).toEqual(mockHostSession.account)
+  })
+
+  it('leaves an existing session alone', async () => {
+    const { token, account } = mockGuestSession
+    useSessionStore.getState().setSession(token, account)
+    const { result } = renderHook(() => useCreateLobby(), { wrapper })
+
+    await act(async () => {
+      await result.current.createLobby()
+    })
+
+    expect(useSessionStore.getState().token).toBe(token)
+    expect(useSessionStore.getState().account).toEqual(account)
   })
 
   it('re-enables the button and sets an error message on a 400', async () => {

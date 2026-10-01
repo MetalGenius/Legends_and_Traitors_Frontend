@@ -1,32 +1,24 @@
 import { create } from 'zustand'
 
-import type { JoinLobbyResponse, LobbyData } from '@features/lobby/types/lobby'
-
-export interface PendingJoin {
-  code: string
-  request: Promise<JoinLobbyResponse>
-}
+import type { LobbyData } from '@features/lobby/types/lobby'
 
 interface LobbyStore {
   lobby: LobbyData | null
   setLobby: (lobby: LobbyData) => void
   clearLobby: () => void
   /**
-   * Join request started from Home, handed to the lobby page so it can wait
-   * on it instead of fetching. Holding the promise (not just the code) means
-   * a re-run effect - e.g. under StrictMode - awaits the same request rather
-   * than joining twice. In-memory only, so a refresh falls back to a GET.
+   * Code of the lobby a join request was last sent for, so the waiting room
+   * can say "Joining" rather than "Loading" while it's in flight. Only
+   * meaningful while that lobby is still loading.
    */
-  pendingJoin: PendingJoin | null
-  setPendingJoin: (pendingJoin: PendingJoin) => void
-  clearPendingJoin: () => void
+  joiningCode: string | null
+  setJoiningCode: (code: string | null) => void
 }
 
 export const useLobbyStore = create<LobbyStore>((set) => ({
   lobby: null,
   setLobby: (lobby) => set({ lobby }),
   clearLobby: () => set({ lobby: null }),
-  pendingJoin: null,
-  setPendingJoin: (pendingJoin) => set({ pendingJoin }),
-  clearPendingJoin: () => set({ pendingJoin: null }),
+  joiningCode: null,
+  setJoiningCode: (joiningCode) => set({ joiningCode }),
 }))

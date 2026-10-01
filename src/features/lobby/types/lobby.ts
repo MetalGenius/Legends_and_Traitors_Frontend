@@ -24,7 +24,7 @@ export interface LobbyResponse {
   data: LobbyData
 }
 
-/** Account the server mints for a player who joins without a token. */
+/** Account the server mints for a player who creates or joins without a token. */
 export interface GuestAccount {
   token: string
   user: {
@@ -36,10 +36,10 @@ export interface GuestAccount {
 }
 
 /**
- * Join returns the lobby plus, when the request carried no token, the guest
- * account the server just created for this player.
+ * Create and join return the lobby plus, when the request carried no token,
+ * the guest account the server just created for this player.
  */
-export interface JoinLobbyResponse extends LobbyResponse {
+export interface LobbyResponseWithGuest extends LobbyResponse {
   guest?: GuestAccount
 }
 
