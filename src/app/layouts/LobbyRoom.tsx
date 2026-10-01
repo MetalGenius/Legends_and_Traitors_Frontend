@@ -5,17 +5,17 @@ import {
   useCopyInviteLink,
   useLobbyState,
   useLobbyStore,
+  usePlayerStore,
   PlayerListItem,
 } from "@features/lobby";
+import { useSessionStore } from "@shared/lib/session";
 
 interface LobbyScreenProps {
-  username?: string;
   onStartGame?: () => void;
   onLeaveGame?: () => void;
 }
 
 export default function LobbyScreen({
-  username = "Guest92117",
   onStartGame,
   onLeaveGame,
 }: LobbyScreenProps) {
@@ -23,6 +23,11 @@ export default function LobbyScreen({
   // Loads the lobby into the store, or redirects Home if the code is bad.
   const { isLoading, isJoining } = useLobbyState(code);
   const lobby = useLobbyStore((state) => state.lobby);
+  // The name this lobby knows us by once joined, else the account's own
+  // display name (never the username handle).
+  const playerName = usePlayerStore((state) => state.displayName);
+  const accountName = useSessionStore((state) => state.account?.displayName);
+  const displayName = playerName ?? accountName ?? "";
 
   const lobbyCode = lobby?.lobbyCode ?? code ?? "";
   const inviteLink = `${window.location.origin}/lobby/${lobbyCode}`;
@@ -38,8 +43,11 @@ export default function LobbyScreen({
         >
           Three Cock
         </span>
-        <span className="text-lg font-medium px-4 py-2 rounded-sm tracking-wide">
-          {username}
+        <span
+          data-testid="header-display-name"
+          className="text-lg font-medium px-4 py-2 rounded-sm tracking-wide"
+        >
+          {displayName}
         </span>
       </header>
 
@@ -98,12 +106,7 @@ export default function LobbyScreen({
             {/* Player cards */}
             <div className="flex flex-wrap justify-center gap-8 mb-15 mt-10">
               {lobby.players.map((player) => (
-                <PlayerListItem
-                  key={player.id}
-                  name={player.name}
-                  isHost={player.isHost}
-                  isReady={player.isReady}
-                />
+                <PlayerListItem key={player.id} player={player} />
               ))}
             </div>
 

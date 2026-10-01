@@ -3,11 +3,14 @@ import { http, HttpResponse } from 'msw'
 import {
   AUTH_ENDPOINTS,
   type ApiErrorBody,
+  type GuestResponse,
+  type GuestUser,
   type LoginCredentials,
   type LoginResponse,
   type Profile,
 } from '@features/auth'
-import { LOBBY_ENDPOINTS, type LobbyResponse } from '@features/lobby'
+import { LOBBY_ENDPOINTS, type LobbyPlayer, type LobbyResponse } from '@features/lobby'
+import type { SessionAccount } from '@shared/lib/session'
 
 // Default (happy-path) handlers shared by every test. A test that needs a
 // failure overrides one with `server.use()`; the override is reset after each
@@ -23,19 +26,46 @@ export const mockProfile: Profile = {
   avatarUrl: null,
 }
 
+export const mockGuestToken = 'mock-guest-token'
+
+/** The account POST /api/auth/guest hands out when no one is logged in. */
+export const mockGuest: GuestUser = {
+  id: 'guest-92117',
+  username: 'guest_92117',
+  displayName: 'Guest92117',
+}
+
+/** mockGuest as the app stores it once the guest request has landed. */
+export const mockGuestSession: { token: string; account: SessionAccount } = {
+  token: mockGuestToken,
+  account: { ...mockGuest, isGuest: true },
+}
+
+/** Who a request's bearer token belongs to, as a lobby player - or null. */
+function playerFromToken(request: Request): LobbyPlayer | null {
+  const auth = request.headers.get('Authorization')
+  const account =
+    auth === `Bearer ${mockGuestToken}` ? mockGuest
+    : auth === `Bearer ${mockToken}` ? mockProfile
+    : null
+  if (!account) return null
+  // The lobby shows players by display name, never their username handle.
+  return { id: account.id, username: account.displayName, isHost: false, isReady: false }
+}
+
 export const mockLobby: LobbyResponse['data'] = {
   lobbyCode: 'AB12CD',
   hostId: 'host-1',
   maxPlayers: 8,
-  players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
+  players: [{ id: 'host-1', username: 'HostName', isHost: true, isReady: false }],
 }
 
-/** mockLobby after a second (non-host) player has joined it. */
+/** mockLobby after the mock guest has joined it. */
 export const mockJoinedLobby: LobbyResponse['data'] = {
   ...mockLobby,
   players: [
     ...mockLobby.players,
-    { id: 'player-2', name: 'Guinevere', isHost: false, isReady: false },
+    { id: mockGuest.id, username: mockGuest.displayName, isHost: false, isReady: false },
   ],
 }
 
@@ -45,10 +75,10 @@ export const mockFullLobby: LobbyResponse['data'] = {
   hostId: 'full-host',
   maxPlayers: 4,
   players: [
-    { id: 'full-host', name: 'Lancelot', isHost: true, isReady: true },
-    { id: 'full-2', name: 'Gawain', isHost: false, isReady: true },
-    { id: 'full-3', name: 'Percival', isHost: false, isReady: false },
-    { id: 'full-4', name: 'Galahad', isHost: false, isReady: true },
+    { id: 'full-host', username: 'Lancelot', isHost: true, isReady: true },
+    { id: 'full-2', username: 'Gawain', isHost: false, isReady: true },
+    { id: 'full-3', username: 'Percival', isHost: false, isReady: false },
+    { id: 'full-4', username: 'Galahad', isHost: false, isReady: true },
   ],
 }
 
@@ -78,6 +108,11 @@ export const handlers = [
     },
   ),
 
+  // No login, no token: the app asks for a guest account on first load.
+  http.post<never, never, GuestResponse>(AUTH_ENDPOINTS.guest, () => {
+    return HttpResponse.json({ token: mockGuestToken, user: mockGuest })
+  }),
+
   http.post<never, never, LobbyResponse>(LOBBY_ENDPOINTS.create, () => {
     return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
   }),
@@ -95,9 +130,14 @@ export const handlers = [
   ),
 
   // AB12CD can be joined; FULL01 has no free seat; anything else is gone.
+  // The joiner is whoever the bearer token belongs to (guest or logged in).
   http.post<{ code: string }, never, LobbyResponse | ApiErrorBody>(
     LOBBY_ENDPOINTS.join(':code'),
-    ({ params }) => {
+    ({ params, request }) => {
+      const player = playerFromToken(request)
+      if (!player) {
+        return HttpResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      }
       const lobby = findMockLobby(params.code)
       if (!lobby) {
         return HttpResponse.json({ message: 'Lobby not found' }, { status: 404 })
@@ -105,7 +145,10 @@ export const handlers = [
       if (lobby.players.length >= lobby.maxPlayers) {
         return HttpResponse.json({ message: 'Lobby is full' }, { status: 409 })
       }
-      return HttpResponse.json({ status: 'SUCCESS', data: mockJoinedLobby })
+      return HttpResponse.json({
+        status: 'SUCCESS',
+        data: { ...lobby, players: [...lobby.players, player] },
+      })
     },
   ),
 ]

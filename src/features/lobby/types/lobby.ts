@@ -3,8 +3,10 @@
 // update it first when the real API is published.
 
 export interface LobbyPlayer {
+  /** The account id - matches SessionAccount.id for the current player. */
   id: string
-  name: string
+  /** What the lobby shows for this player (the account's display name). */
+  username: string
   isHost: boolean
   isReady: boolean
 }

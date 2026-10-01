@@ -14,6 +14,18 @@ export interface Profile extends User {
   avatarUrl: string | null
 }
 
+/** Account the server mints for someone who hasn't logged in. */
+export interface GuestUser {
+  id: string
+  username: string
+  displayName: string
+}
+
+export interface GuestResponse {
+  token: string
+  user: GuestUser
+}
+
 export interface LoginCredentials {
   email: string
   password: string

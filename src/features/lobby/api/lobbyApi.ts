@@ -1,4 +1,5 @@
 import type { ApiErrorBody, LobbyResponse } from '@features/lobby/types/lobby'
+import { getAuthHeaders } from '@shared/lib/session'
 
 export const LOBBY_ENDPOINTS = {
   create: '/api/lobby',
@@ -33,11 +34,14 @@ async function readErrorMessage(response: Response): Promise<string> {
  * came back non-2xx. Callers rely on that distinction for their messaging.
  */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // The server identifies the player from this token (a guest one if they
+  // haven't logged in), so it's sent on every lobby call.
+  const authHeaders = await getAuthHeaders()
   let response: Response
   try {
     response = await fetch(path, {
       ...init,
-      headers: { Accept: 'application/json', ...init?.headers },
+      headers: { Accept: 'application/json', ...authHeaders, ...init?.headers },
     })
   } catch {
     throw new Error('Network error: could not reach the server.')

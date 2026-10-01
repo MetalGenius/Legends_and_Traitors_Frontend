@@ -1,17 +1,14 @@
 import { Crown } from "lucide-react";
 
+import type { LobbyPlayer } from "@features/lobby/types/lobby";
+
 interface PlayerListItemProps {
-  name: string;
-  isHost?: boolean;
-  isReady?: boolean;
+  player: LobbyPlayer;
 }
 
-export default function PlayerListItem({
-  name,
-  isHost = false,
-  isReady = false,
-}: PlayerListItemProps) {
-  const initial = name.trim().charAt(0).toUpperCase();
+export default function PlayerListItem({ player }: PlayerListItemProps) {
+  const { username, isHost, isReady } = player;
+  const initial = username.trim().charAt(0).toUpperCase();
 
   return (
     <div className="relative w-56 rounded-xl border-4 border-[#e0a548] bg-[#d9d9d9] overflow-hidden transition-transform duration-150 hover:scale-[1.03]">
@@ -25,7 +22,7 @@ export default function PlayerListItem({
       <div className="h-44 bg-[#9c9c9c] flex items-center justify-center text-5xl font-bold text-white">
         {initial}
       </div>
-      <p className="text-center text-black py-3 text-base">{name}</p>
+      <p className="text-center text-black py-3 text-base">{username}</p>
       <p
         data-testid="player-ready-status"
         className={`text-center text-xs font-bold uppercase tracking-wide pb-2 ${

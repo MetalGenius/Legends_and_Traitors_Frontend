@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import { ApiError, getLobbyState } from "@features/lobby/api/lobbyApi";
 import { useLobbyStore } from "@features/lobby/stores/lobbyStore";
+import { usePlayerStore } from "@features/lobby/stores/playerStore";
+import { useSessionStore } from "@shared/lib/session";
 
 export const INVALID_CODE_MESSAGE =
   "That lobby code is invalid or has expired.";
@@ -34,6 +36,8 @@ export function useLobbyState(code: string | undefined) {
   const setLobby = useLobbyStore((state) => state.setLobby);
   const clearLobby = useLobbyStore((state) => state.clearLobby);
   const clearPendingJoin = useLobbyStore((state) => state.clearPendingJoin);
+  const setDisplayName = usePlayerStore((state) => state.setDisplayName);
+  const clearPlayer = usePlayerStore((state) => state.clearPlayer);
   const pendingJoinCode = useLobbyStore((state) => state.pendingJoin?.code);
   // The code whose fetch has settled, either way. Deriving isLoading from it
   // keeps setState out of the effect, and means a different code re-enters
@@ -63,11 +67,17 @@ export function useLobbyState(code: string | undefined) {
       .then((response) => {
         if (cancelled) return;
         setLobby(response.data);
+        if (!join) return;
+        // Remember the name the lobby shows for us, found by account id.
+        const accountId = useSessionStore.getState().account?.id;
+        const me = response.data.players.find((p) => p.id === accountId);
+        if (me) setDisplayName(me.username);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         // Don't let the previous lobby linger on screen behind the redirect.
         clearLobby();
+        clearPlayer();
         navigate("/", {
           state: { lobbyError: failureMessage(error, Boolean(join)) },
         });
@@ -85,7 +95,15 @@ export function useLobbyState(code: string | undefined) {
     return () => {
       cancelled = true;
     };
-  }, [code, navigate, setLobby, clearLobby, clearPendingJoin]);
+  }, [
+    code,
+    navigate,
+    setLobby,
+    clearLobby,
+    clearPendingJoin,
+    setDisplayName,
+    clearPlayer,
+  ]);
 
   return { isLoading, isJoining };
 }

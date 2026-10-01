@@ -1,11 +1,17 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { LOBBY_ENDPOINTS, useLobbyStore, type LobbyData } from '@features/lobby'
-import { mockJoinedLobby, mockLobby } from '@mocks/handlers'
+import {
+  LOBBY_ENDPOINTS,
+  useLobbyStore,
+  usePlayerStore,
+  type LobbyData,
+} from '@features/lobby'
+import { mockGuest, mockJoinedLobby, mockLobby } from '@mocks/handlers'
 import { server } from '@mocks/server'
+import { useSessionStore } from '@shared/lib/session'
 
 import LobbyRoom from './LobbyRoom'
 
@@ -37,6 +43,7 @@ beforeEach(() => {
   // Module-level singleton shared across tests - reset between them.
   useLobbyStore.getState().clearLobby()
   useLobbyStore.getState().clearPendingJoin()
+  usePlayerStore.getState().clearPlayer()
 })
 
 describe('LobbyRoom', () => {
@@ -53,8 +60,11 @@ describe('LobbyRoom', () => {
     renderLobby()
 
     expect(screen.getByTestId('lobby-loading').textContent).toBe('Joining lobby...')
-    expect(await screen.findByText('Guinevere')).toBeDefined()
+    expect(await screen.findByText('Player (2/8)')).toBeDefined()
     expect(screen.queryByTestId('lobby-loading')).toBeNull()
+    expect(screen.getByText('HostName')).toBeDefined()
+    // The guest's own card, alongside the host's.
+    expect(screen.getAllByText(mockGuest.displayName).length).toBeGreaterThan(0)
   })
 
   it('shows the fetched lobby once loading finishes', async () => {
@@ -69,8 +79,8 @@ describe('LobbyRoom', () => {
       ...mockLobby,
       maxPlayers: 6,
       players: [
-        { id: '1', name: 'Arthur', isHost: true, isReady: false },
-        { id: '2', name: 'Lancelot', isHost: false, isReady: true },
+        { id: '1', username: 'Arthur', isHost: true, isReady: false },
+        { id: '2', username: 'Lancelot', isHost: false, isReady: true },
       ],
     })
 
@@ -83,8 +93,8 @@ describe('LobbyRoom', () => {
     serveLobby({
       ...mockLobby,
       players: [
-        { id: '1', name: 'Arthur', isHost: true, isReady: false },
-        { id: '2', name: 'Lancelot', isHost: false, isReady: true },
+        { id: '1', username: 'Arthur', isHost: true, isReady: false },
+        { id: '2', username: 'Lancelot', isHost: false, isReady: true },
       ],
     })
 
@@ -122,6 +132,47 @@ describe('LobbyRoom', () => {
     fireEvent.click(await screen.findByText('Leave Game'))
 
     expect(onLeaveGame).toHaveBeenCalledTimes(1)
+  })
+
+  describe('header name', () => {
+    it("shows the account's display name, not its username", async () => {
+      renderLobby()
+
+      const header = screen.getByTestId('header-display-name')
+      expect(header.textContent).toBe(mockGuest.displayName)
+      expect(header.textContent).not.toBe(mockGuest.username)
+    })
+
+    it('switches to the name the lobby knows us by once we have joined', async () => {
+      // The server may show us differently from our account's display name.
+      const joined = {
+        ...mockLobby,
+        players: [
+          ...mockLobby.players,
+          { id: mockGuest.id, username: 'Sir Guest', isHost: false, isReady: false },
+        ],
+      }
+      useLobbyStore.getState().setPendingJoin({
+        code: 'AB12CD',
+        request: Promise.resolve({ status: 'SUCCESS', data: joined }),
+      })
+
+      renderLobby()
+
+      const header = screen.getByTestId('header-display-name')
+      await waitFor(() => {
+        expect(header.textContent).toBe('Sir Guest')
+      })
+      expect(usePlayerStore.getState().displayName).toBe('Sir Guest')
+    })
+
+    it('is empty rather than a placeholder before any session exists', () => {
+      useSessionStore.getState().clearSession()
+
+      renderLobby()
+
+      expect(within(screen.getByRole('banner')).getByTestId('header-display-name').textContent).toBe('')
+    })
   })
 
   describe('when the lobby cannot be loaded', () => {

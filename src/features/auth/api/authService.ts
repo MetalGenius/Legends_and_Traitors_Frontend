@@ -1,5 +1,6 @@
 import type {
   ApiErrorBody,
+  GuestResponse,
   LoginCredentials,
   LoginResponse,
   Profile,
@@ -8,6 +9,7 @@ import type {
 export const AUTH_ENDPOINTS = {
   login: '/api/auth/login',
   profile: '/api/auth/profile',
+  guest: '/api/auth/guest',
 } as const
 
 /** A request that reached the server and came back with a non-2xx status. */
@@ -60,4 +62,9 @@ export function login(credentials: LoginCredentials): Promise<LoginResponse> {
 
 export function getProfile(token: string): Promise<Profile> {
   return request<Profile>(AUTH_ENDPOINTS.profile, { token })
+}
+
+/** Mints a guest account and its token - for players who haven't logged in. */
+export function createGuest(): Promise<GuestResponse> {
+  return request<GuestResponse>(AUTH_ENDPOINTS.guest, { method: 'POST' })
 }
