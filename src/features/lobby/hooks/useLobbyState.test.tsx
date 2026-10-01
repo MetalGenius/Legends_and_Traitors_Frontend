@@ -6,8 +6,16 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { joinLobby, LOBBY_ENDPOINTS } from '@features/lobby/api/lobbyApi'
 import { useLobbyStore } from '@features/lobby/stores/lobbyStore'
-import { mockFullLobby, mockJoinedLobby, mockLobby } from '@mocks/handlers'
+import { usePlayerStore } from '@features/lobby/stores/playerStore'
+import {
+  mockFullLobby,
+  mockGuest,
+  mockGuestSession,
+  mockJoinedLobby,
+  mockLobby,
+} from '@mocks/handlers'
 import { server } from '@mocks/server'
+import { useSessionStore } from '@shared/lib/session'
 
 import {
   GAME_STARTED_MESSAGE,
@@ -54,6 +62,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   useLobbyStore.getState().clearLobby()
   useLobbyStore.getState().clearPendingJoin()
+  usePlayerStore.getState().clearPlayer()
   lastLocation = { pathname: '', lobbyError: null }
 })
 
@@ -186,6 +195,36 @@ describe('useLobbyState', () => {
       expect(fetched).toBe(false)
     })
 
+    it("stores our player's username as the player display name", async () => {
+      // As useJoinLobby leaves it once a join has handed back our guest account.
+      const { token, account } = mockGuestSession
+      useSessionStore.getState().setSession(token, account)
+      startJoin()
+
+      const { result } = renderHook(() => useLobbyState('AB12CD'), { wrapper })
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false)
+      })
+      // The mock join lists us under the account's display name.
+      expect(usePlayerStore.getState().displayName).toBe(mockGuest.displayName)
+    })
+
+    it("leaves the player display name alone if we aren't in the joined lobby", async () => {
+      // A server answering with a lobby that somehow doesn't include us.
+      useLobbyStore.getState().setPendingJoin({
+        code: 'AB12CD',
+        request: Promise.resolve({ status: 'SUCCESS', data: mockLobby }),
+      })
+
+      const { result } = renderHook(() => useLobbyState('AB12CD'), { wrapper })
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false)
+      })
+      expect(usePlayerStore.getState().displayName).toBeNull()
+    })
+
     it('spends the pending join once it settles', async () => {
       startJoin()
 
@@ -207,6 +246,20 @@ describe('useLobbyState', () => {
         expect(result.current.isLoading).toBe(false)
       })
       expect(useLobbyStore.getState().lobby).toEqual(mockLobby)
+      // Only a join sets who we are in the lobby.
+      expect(usePlayerStore.getState().displayName).toBeNull()
+    })
+
+    it('clears the player display name when a join fails', async () => {
+      usePlayerStore.getState().setDisplayName('From another lobby')
+      startJoin('ZZ99ZZ')
+
+      renderHook(() => useLobbyState('ZZ99ZZ'), { wrapper })
+
+      await waitFor(() => {
+        expect(lastLocation.pathname).toBe('/')
+      })
+      expect(usePlayerStore.getState().displayName).toBeNull()
     })
 
     it.each([

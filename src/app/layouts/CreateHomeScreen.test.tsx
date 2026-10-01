@@ -3,15 +3,19 @@ import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { LOBBY_ENDPOINTS, useLobbyStore } from '@features/lobby'
+import { LOBBY_ENDPOINTS, useLobbyStore, usePlayerStore } from '@features/lobby'
+import { mockGuest, mockGuestToken } from '@mocks/handlers'
 import { server } from '@mocks/server'
+import { useSessionStore } from '@shared/lib/session'
 
 import CreateHomeScreen from './CreateHomeScreen'
+import LobbyRoom from './LobbyRoom'
 
 // The lobby store is a module-level singleton shared across tests - reset it
 // so one test's created lobby can't leak into the next.
 beforeEach(() => {
   useLobbyStore.getState().clearLobby()
+  usePlayerStore.getState().clearPlayer()
 })
 
 function renderHome(state?: unknown) {
@@ -88,6 +92,31 @@ describe('CreateHomeScreen', () => {
       renderHome()
 
       expect(screen.queryByRole('alert')).toBeNull()
+    })
+  })
+
+  describe('joining for the first time, with no account yet', () => {
+    it('becomes the guest the join created, shown by display name', async () => {
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<CreateHomeScreen />} />
+            <Route path="/lobby/:code" element={<LobbyRoom />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      fireEvent.change(screen.getByTestId('join-lobby-input'), {
+        target: { value: 'AB12CD' },
+      })
+      fireEvent.click(screen.getByTestId('join-lobby-submit'))
+
+      expect(await screen.findByText('Player (2/8)')).toBeDefined()
+      expect(screen.getByTestId('header-display-name').textContent).toBe(
+        mockGuest.displayName,
+      )
+      expect(useSessionStore.getState().token).toBe(mockGuestToken)
+      expect(usePlayerStore.getState().displayName).toBe(mockGuest.displayName)
     })
   })
 })

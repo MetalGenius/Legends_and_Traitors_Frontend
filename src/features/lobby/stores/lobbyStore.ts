@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 
-import type { LobbyData, LobbyResponse } from '@features/lobby/types/lobby'
+import type { JoinLobbyResponse, LobbyData } from '@features/lobby/types/lobby'
 
 export interface PendingJoin {
   code: string
-  request: Promise<LobbyResponse>
+  request: Promise<JoinLobbyResponse>
 }
 
 interface LobbyStore {

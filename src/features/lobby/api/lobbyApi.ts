@@ -1,4 +1,9 @@
-import type { ApiErrorBody, LobbyResponse } from '@features/lobby/types/lobby'
+import type {
+  ApiErrorBody,
+  JoinLobbyResponse,
+  LobbyResponse,
+} from '@features/lobby/types/lobby'
+import { authHeaders } from '@shared/lib/session'
 
 export const LOBBY_ENDPOINTS = {
   create: '/api/lobby',
@@ -37,7 +42,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(path, {
       ...init,
-      headers: { Accept: 'application/json', ...init?.headers },
+      // Identifies the player; absent until they've logged in or joined once.
+      headers: { Accept: 'application/json', ...authHeaders(), ...init?.headers },
     })
   } catch {
     throw new Error('Network error: could not reach the server.')
@@ -61,10 +67,11 @@ export function getLobbyState(code: string): Promise<LobbyResponse> {
 }
 
 /**
- * Adds the current user to an existing lobby and returns its updated state.
- * Throws an ApiError with 404 if the lobby is gone, 409 if it's full, and
- * 400 if its game has already started.
+ * Adds the current player to an existing lobby and returns its updated state.
+ * Sent without a token, the server creates a guest account for the player and
+ * returns it as `guest`. Throws an ApiError with 404 if the lobby is gone,
+ * 409 if it's full, and 400 if its game has already started.
  */
-export function joinLobby(code: string): Promise<LobbyResponse> {
-  return request<LobbyResponse>(LOBBY_ENDPOINTS.join(code), { method: 'POST' })
+export function joinLobby(code: string): Promise<JoinLobbyResponse> {
+  return request<JoinLobbyResponse>(LOBBY_ENDPOINTS.join(code), { method: 'POST' })
 }

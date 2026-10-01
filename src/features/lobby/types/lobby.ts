@@ -3,8 +3,10 @@
 // update it first when the real API is published.
 
 export interface LobbyPlayer {
+  /** The account id - matches SessionAccount.id for the current player. */
   id: string
-  name: string
+  /** What the lobby shows for this player (the account's display name). */
+  username: string
   isHost: boolean
   isReady: boolean
 }
@@ -20,6 +22,25 @@ export interface LobbyData {
 export interface LobbyResponse {
   status: string
   data: LobbyData
+}
+
+/** Account the server mints for a player who joins without a token. */
+export interface GuestAccount {
+  token: string
+  user: {
+    id: string
+    /** Unique handle - not for display. */
+    username: string
+    displayName: string
+  }
+}
+
+/**
+ * Join returns the lobby plus, when the request carried no token, the guest
+ * account the server just created for this player.
+ */
+export interface JoinLobbyResponse extends LobbyResponse {
+  guest?: GuestAccount
 }
 
 /** Body the API returns alongside a non-2xx status. */

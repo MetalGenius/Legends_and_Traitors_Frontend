@@ -8,7 +8,7 @@ const lobby: LobbyData = {
   lobbyCode: 'AB12CD',
   hostId: 'host-1',
   maxPlayers: 8,
-  players: [{ id: 'host-1', name: 'HostName', isHost: true, isReady: false }],
+  players: [{ id: 'host-1', username: 'HostName', isHost: true, isReady: false }],
 }
 
 // Module-level singleton shared across tests - reset it each time.
