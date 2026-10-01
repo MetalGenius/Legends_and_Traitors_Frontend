@@ -6,6 +6,8 @@ import {
   mockGuest,
   mockGuestSession,
   mockGuestToken,
+  mockHost,
+  mockHostToken,
   mockJoinedLobby,
   mockLobby,
   mockProfile,
@@ -24,6 +26,26 @@ describe('lobbyApi.createLobby', () => {
     expect(result.data).toEqual(mockLobby)
   })
 
+  it('returns the guest account it made for a host with no token', async () => {
+    const result = await createLobby()
+
+    expect(result.guest).toEqual({ token: mockHostToken, user: mockHost })
+    expect(result.data.hostId).toBe(mockHost.id)
+  })
+
+  it('makes whoever the token belongs to the host, with no new guest', async () => {
+    const { token, account } = mockGuestSession
+    useSessionStore.getState().setSession(token, account)
+
+    const result = await createLobby()
+
+    expect(result.guest).toBeUndefined()
+    expect(result.data.hostId).toBe(account.id)
+    expect(result.data.players).toEqual([
+      { id: account.id, username: account.displayName, isHost: true, isReady: false },
+    ])
+  })
+
   it('throws an ApiError with the server message on a 400', async () => {
     server.use(
       http.post(LOBBY_ENDPOINTS.create, () =>
@@ -34,7 +56,31 @@ describe('lobbyApi.createLobby', () => {
     const error = await createLobby().catch((e: unknown) => e)
 
     expect(error).toBeInstanceOf(ApiError)
-    expect(error).toMatchObject({ status: 400, message: 'Invalid request' })
+    expect(error).toMatchObject({
+      status: 400,
+      message: 'Invalid request',
+      serverMessage: 'Invalid request',
+    })
+  })
+
+  it('has no serverMessage when the error body is not JSON', async () => {
+    server.use(
+      http.post(LOBBY_ENDPOINTS.create, () =>
+        new HttpResponse('<html>502 Bad Gateway</html>', {
+          status: 502,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+      ),
+    )
+
+    const error = await createLobby().catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error).toMatchObject({
+      status: 502,
+      message: 'Request failed with status 502',
+      serverMessage: null,
+    })
   })
 
   it('throws an ApiError with the server message on a 500', async () => {
@@ -132,6 +178,14 @@ describe('lobbyApi.joinLobby', () => {
     const result = await joinLobby(mockLobby.lobbyCode)
 
     expect(result.guest).toEqual({ token: mockGuestToken, user: mockGuest })
+  })
+
+  it('returns the lobby unchanged for someone already in it', async () => {
+    useSessionStore.getState().setSession(mockHostToken, { ...mockHost, isGuest: true })
+
+    const result = await joinLobby(mockLobby.lobbyCode)
+
+    expect(result.data).toEqual(mockLobby)
   })
 
   it('returns no guest account when the player already has a token', async () => {

@@ -10,9 +10,9 @@ import {
 import {
   LOBBY_ENDPOINTS,
   type GuestAccount,
-  type JoinLobbyResponse,
   type LobbyPlayer,
   type LobbyResponse,
+  type LobbyResponseWithGuest,
 } from '@features/lobby'
 import type { SessionAccount } from '@shared/lib/session'
 
@@ -45,9 +45,25 @@ export const mockGuestSession: { token: string; account: SessionAccount } = {
   account: { ...mockGuest, isGuest: true },
 }
 
+export const mockHostToken = 'mock-host-token'
+
+/** The guest account a create without a token makes for the host. */
+export const mockHost: GuestAccount['user'] = {
+  id: 'host-1',
+  username: 'host_1',
+  displayName: 'HostName',
+}
+
+/** mockHost as the app stores it after creating mockLobby. */
+export const mockHostSession: { token: string; account: SessionAccount } = {
+  token: mockHostToken,
+  account: { ...mockHost, isGuest: true },
+}
+
 /** The account a request's bearer token belongs to, or null if unknown. */
 function accountFromToken(auth: string) {
   if (auth === `Bearer ${mockGuestToken}`) return mockGuest
+  if (auth === `Bearer ${mockHostToken}`) return mockHost
   if (auth === `Bearer ${mockToken}`) return mockProfile
   return null
 }
@@ -59,9 +75,9 @@ function asPlayer(account: { id: string; displayName: string }): LobbyPlayer {
 
 export const mockLobby: LobbyResponse['data'] = {
   lobbyCode: 'AB12CD',
-  hostId: 'host-1',
+  hostId: mockHost.id,
   maxPlayers: 8,
-  players: [{ id: 'host-1', username: 'HostName', isHost: true, isReady: false }],
+  players: [{ ...asPlayer(mockHost), isHost: true }],
 }
 
 /** mockLobby after the mock guest has joined it. */
@@ -112,9 +128,33 @@ export const handlers = [
     },
   ),
 
-  http.post<never, never, LobbyResponse>(LOBBY_ENDPOINTS.create, () => {
-    return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
-  }),
+  // The host is whoever the token belongs to. With no token, the server
+  // creates a guest account for the host and hands it back with the lobby.
+  http.post<never, never, LobbyResponseWithGuest | ApiErrorBody>(
+    LOBBY_ENDPOINTS.create,
+    ({ request }) => {
+      const auth = request.headers.get('Authorization')
+      if (!auth) {
+        return HttpResponse.json({
+          status: 'SUCCESS',
+          data: mockLobby,
+          guest: { token: mockHostToken, user: mockHost },
+        })
+      }
+      const account = accountFromToken(auth)
+      if (!account) {
+        return HttpResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      }
+      return HttpResponse.json({
+        status: 'SUCCESS',
+        data: {
+          ...mockLobby,
+          hostId: account.id,
+          players: [{ ...asPlayer(account), isHost: true }],
+        },
+      })
+    },
+  ),
 
   // Only the mock lobbies exist; any other code behaves like an expired one.
   http.get<{ code: string }, never, LobbyResponse | ApiErrorBody>(
@@ -131,7 +171,7 @@ export const handlers = [
   // AB12CD can be joined; FULL01 has no free seat; anything else is gone.
   // The joiner is whoever the bearer token belongs to. With no token at all,
   // the server creates a guest account and hands it back alongside the lobby.
-  http.post<{ code: string }, never, JoinLobbyResponse | ApiErrorBody>(
+  http.post<{ code: string }, never, LobbyResponseWithGuest | ApiErrorBody>(
     LOBBY_ENDPOINTS.join(':code'),
     ({ params, request }) => {
       const auth = request.headers.get('Authorization')
@@ -142,6 +182,10 @@ export const handlers = [
       const lobby = findMockLobby(params.code)
       if (!lobby) {
         return HttpResponse.json({ message: 'Lobby not found' }, { status: 404 })
+      }
+      // Already a player: nothing to add (and a full lobby doesn't apply).
+      if (lobby.players.some((player) => player.id === account.id)) {
+        return HttpResponse.json({ status: 'SUCCESS', data: lobby })
       }
       if (lobby.players.length >= lobby.maxPlayers) {
         return HttpResponse.json({ message: 'Lobby is full' }, { status: 409 })

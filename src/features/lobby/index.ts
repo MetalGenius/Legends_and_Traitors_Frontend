@@ -19,8 +19,8 @@ export { usePlayerStore } from './stores/playerStore'
 export { LOBBY_ENDPOINTS } from './api/lobbyApi'
 export type {
   GuestAccount,
-  JoinLobbyResponse,
   LobbyData,
   LobbyPlayer,
   LobbyResponse,
+  LobbyResponseWithGuest,
 } from './types/lobby'

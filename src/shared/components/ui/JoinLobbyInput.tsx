@@ -3,8 +3,8 @@ import type { ChangeEvent, KeyboardEvent } from "react";
 
 interface JoinLobbyInputProps {
   /**
-   * Called with the sanitized 6-character code once submitted — either by
-   * clicking the button (manual path) or automatically (URL path).
+   * Called with the sanitized 6-character code once submitted, by clicking
+   * the button or pressing Enter.
    */
   onSubmit: (code: string) => void;
   className?: string;

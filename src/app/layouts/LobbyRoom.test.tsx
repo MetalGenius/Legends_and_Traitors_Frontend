@@ -9,7 +9,13 @@ import {
   usePlayerStore,
   type LobbyData,
 } from '@features/lobby'
-import { mockGuest, mockGuestSession, mockJoinedLobby, mockLobby } from '@mocks/handlers'
+import {
+  mockGuest,
+  mockGuestSession,
+  mockHostSession,
+  mockJoinedLobby,
+  mockLobby,
+} from '@mocks/handlers'
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
 
@@ -27,12 +33,22 @@ function renderLobby(props = {}, code = 'AB12CD') {
   )
 }
 
-/** Makes the GET for `code` return this lobby instead of the default. */
+/**
+ * Waits for the room to finish getting in (or redirect). Every test must: an
+ * unfinished request for the same code would be reused by the next test.
+ */
+async function settle() {
+  await waitFor(() => {
+    expect(screen.queryByTestId('lobby-loading')).toBeNull()
+  })
+}
+
+/** Makes the lobby endpoints (load and join) return this lobby instead. */
 function serveLobby(lobby: LobbyData) {
+  const body = { status: 'SUCCESS', data: lobby }
   server.use(
-    http.get(LOBBY_ENDPOINTS.detail(':code'), () =>
-      HttpResponse.json({ status: 'SUCCESS', data: lobby }),
-    ),
+    http.get(LOBBY_ENDPOINTS.detail(':code'), () => HttpResponse.json(body)),
+    http.post(LOBBY_ENDPOINTS.join(':code'), () => HttpResponse.json(body)),
   )
 }
 
@@ -42,20 +58,25 @@ beforeEach(() => {
   })
   // Module-level singleton shared across tests - reset between them.
   useLobbyStore.getState().clearLobby()
-  useLobbyStore.getState().clearPendingJoin()
+  useLobbyStore.getState().setJoiningCode(null)
   usePlayerStore.getState().clearPlayer()
+  // Most of these tests are about the room itself, viewed by its host - who
+  // is already a player, so arriving just loads it.
+  const { token, account } = mockHostSession
+  useSessionStore.getState().setSession(token, account)
 })
 
 describe('LobbyRoom', () => {
-  it('shows a loading state while the lobby is being fetched', () => {
+  it('shows a loading state while the lobby is being fetched', async () => {
     renderLobby()
 
     expect(screen.getByTestId('lobby-loading')).toBeDefined()
+    await settle()
   })
 
   it('shows a joining state until the join succeeds, then the joined players', async () => {
-    const request = Promise.resolve({ status: 'SUCCESS', data: mockJoinedLobby })
-    useLobbyStore.getState().setPendingJoin({ code: 'AB12CD', request })
+    // A first-time visitor arriving by invite link (or a typed code).
+    useSessionStore.getState().clearSession()
 
     renderLobby()
 
@@ -65,6 +86,14 @@ describe('LobbyRoom', () => {
     expect(screen.getByText('HostName')).toBeDefined()
     // The guest's own card, alongside the host's.
     expect(screen.getAllByText(mockGuest.displayName).length).toBeGreaterThan(0)
+    expect(useLobbyStore.getState().lobby).toEqual(mockJoinedLobby)
+  })
+
+  it('just loads the lobby for someone already in it', async () => {
+    renderLobby()
+
+    expect(screen.getByTestId('lobby-loading').textContent).toBe('Loading lobby...')
+    await settle()
   })
 
   it('shows the fetched lobby once loading finishes', async () => {
@@ -146,20 +175,17 @@ describe('LobbyRoom', () => {
       const header = screen.getByTestId('header-display-name')
       expect(header.textContent).toBe(mockGuest.displayName)
       expect(header.textContent).not.toBe(mockGuest.username)
+      await settle()
     })
 
     it('switches to the name the lobby knows us by once we have joined', async () => {
       // The server may show us differently from our account's display name.
-      const joined = {
+      serveLobby({
         ...mockLobby,
         players: [
           ...mockLobby.players,
           { id: mockGuest.id, username: 'Sir Guest', isHost: false, isReady: false },
         ],
-      }
-      useLobbyStore.getState().setPendingJoin({
-        code: 'AB12CD',
-        request: Promise.resolve({ status: 'SUCCESS', data: joined }),
       })
 
       renderLobby()
@@ -171,12 +197,13 @@ describe('LobbyRoom', () => {
       expect(usePlayerStore.getState().displayName).toBe('Sir Guest')
     })
 
-    it('is empty rather than a placeholder before any session exists', () => {
+    it('is empty rather than a placeholder before any session exists', async () => {
       useSessionStore.getState().clearSession()
 
       renderLobby()
 
       expect(within(screen.getByRole('banner')).getByTestId('header-display-name').textContent).toBe('')
+      await settle()
     })
   })
 

@@ -1,7 +1,8 @@
 /**
  * Cypress runs against `npm run preview` - the production build, where MSW is
  * deliberately disabled. Every API call therefore has to be stubbed here with
- * cy.intercept, including the GET (or join POST) the waiting room fires on mount.
+ * cy.intercept, including the GET and/or join POST the waiting room fires on
+ * mount.
  */
 function lobby(code, overrides = {}) {
   return {
@@ -17,9 +18,33 @@ function lobby(code, overrides = {}) {
 }
 
 // Nobody logs in during these specs, and Cypress clears localStorage between
-// tests, so every join is a first join: the server creates a guest account
-// and returns it alongside the lobby.
+// tests, so unless a test seeds a session, every visitor is a first-timer: a
+// create or join without a token makes the server return a guest account.
 const guest = { id: 'guest-92117', username: 'guest_92117', displayName: 'Guest92117' }
+const host = { id: 'host-1', username: 'host_1', displayName: 'HostName' }
+
+/** A lobby after the guest has joined it, as the join endpoint returns it. */
+function joinedLobby(code = 'ABC123') {
+  return {
+    ...lobby(code, {
+      players: [
+        { id: host.id, username: host.displayName, isHost: true, isReady: false },
+        { id: guest.id, username: guest.displayName, isHost: false, isReady: false },
+      ],
+    }),
+    guest: { token: 'guest-token', user: guest },
+  }
+}
+
+/** A session the app would have saved on an earlier visit. */
+function seedSession(token, account) {
+  return (win) => {
+    win.localStorage.setItem(
+      'lt-session',
+      JSON.stringify({ state: { token, account: { ...account, isGuest: true } }, version: 0 }),
+    )
+  }
+}
 
 describe('Home screen', () => {
   beforeEach(() => {
@@ -45,9 +70,14 @@ describe('Home screen', () => {
   it('creates a lobby and lands in that room', () => {
     // Delayed so the in-flight button state is observable.
     cy.intercept('POST', '/api/lobby', (req) =>
-      req.reply({ delay: 300, body: lobby('AB12CD') }),
+      req.reply({
+        delay: 300,
+        body: { ...lobby('AB12CD'), guest: { token: 'host-token', user: host } },
+      }),
     ).as('createLobby')
     cy.intercept('GET', '/api/lobby/AB12CD', { body: lobby('AB12CD') }).as('getLobby')
+    // The host is already in their lobby - arriving must not join it again.
+    cy.intercept('POST', '/api/lobby/AB12CD/join', cy.spy().as('joinLobby'))
 
     cy.get('[data-testid="create-lobby-button"]').click()
 
@@ -65,6 +95,8 @@ describe('Home screen', () => {
     cy.contains('AB12CD').should('be.visible')
     cy.contains('HostName').should('be.visible')
     cy.contains('Player (1/8)').should('be.visible')
+    cy.get('[data-testid="header-display-name"]').should('have.text', host.displayName)
+    cy.get('@joinLobby').should('not.have.been.called')
   })
 
   it('shows an inline error and stays put when creating a lobby fails', () => {
@@ -86,18 +118,7 @@ describe('Home screen', () => {
     cy.intercept('POST', '/api/lobby/ABC123/join', (req) => {
       // No account yet, so no token - this join is what creates the guest.
       expect(req.headers).not.to.have.property('authorization')
-      req.reply({
-        delay: 500,
-        body: {
-          ...lobby('ABC123', {
-            players: [
-              { id: 'host-1', username: 'HostName', isHost: true, isReady: false },
-              { id: guest.id, username: guest.displayName, isHost: false, isReady: false },
-            ],
-          }),
-          guest: { token: 'guest-token', user: guest },
-        },
-      })
+      req.reply({ delay: 500, body: joinedLobby() })
     }).as('joinLobby')
 
     cy.get('[data-testid="join-lobby-input"]').type('ABC123')
@@ -130,46 +151,93 @@ describe('Home screen', () => {
     cy.wait('@joinLobby')
 
     cy.url().should('not.include', '/lobby/')
-    cy.contains('That lobby is full.').should('be.visible')
+    // Whatever the server said, word for word.
+    cy.get('[role="alert"]').should('have.text', 'Lobby is full')
   })
 })
 
-describe('Lobby waiting room', () => {
-  it('shows a loading state before the lobby arrives', () => {
-    cy.intercept('GET', '/api/lobby/AB12CD', (req) =>
-      req.reply({ delay: 500, body: lobby('AB12CD') }),
-    ).as('getLobby')
+describe('Opening an invite link', () => {
+  it('joins the lobby, exactly like typing the code on Home', () => {
+    cy.intercept('POST', '/api/lobby/ABC123/join', (req) =>
+      req.reply({ delay: 500, body: joinedLobby() }),
+    ).as('joinLobby')
 
-    cy.visit('/lobby/AB12CD')
+    // Someone pasting the link the host copied straight into the address bar.
+    cy.visit('/lobby/ABC123')
 
-    cy.get('[data-testid="lobby-loading"]').should('be.visible')
-    cy.wait('@getLobby')
+    cy.get('[data-testid="lobby-loading"]').should('contain', 'Joining lobby')
+    cy.wait('@joinLobby')
     cy.get('[data-testid="lobby-loading"]').should('not.exist')
+    cy.contains('Player (2/8)').should('be.visible')
     cy.contains('HostName').should('be.visible')
+    cy.get('[data-testid="header-display-name"]').should('have.text', guest.displayName)
+    cy.window()
+      .its('localStorage')
+      .invoke('getItem', 'lt-session')
+      .should('contain', 'guest-token')
+  })
+
+  it('only loads the lobby for someone already in it (e.g. a refresh)', () => {
+    cy.intercept('GET', '/api/lobby/ABC123', { body: joinedLobby() }).as('getLobby')
+    cy.intercept('POST', '/api/lobby/ABC123/join', cy.spy().as('joinLobby'))
+
+    cy.visit('/lobby/ABC123', { onBeforeLoad: seedSession('guest-token', guest) })
+
+    cy.wait('@getLobby')
+    cy.contains('Player (2/8)').should('be.visible')
+    cy.get('@joinLobby').should('not.have.been.called')
+  })
+
+  it('joins when a returning player follows a link to a lobby they are not in', () => {
+    cy.intercept('GET', '/api/lobby/ABC123', { body: lobby('ABC123') }).as('getLobby')
+    cy.intercept('POST', '/api/lobby/ABC123/join', (req) => {
+      // Their saved session identifies them; no new guest needed.
+      expect(req.headers.authorization).to.equal('Bearer guest-token')
+      const { guest: _, ...body } = joinedLobby()
+      req.reply({ body })
+    }).as('joinLobby')
+
+    cy.visit('/lobby/ABC123', { onBeforeLoad: seedSession('guest-token', guest) })
+
+    cy.wait('@getLobby')
+    cy.wait('@joinLobby')
+    cy.contains('Player (2/8)').should('be.visible')
   })
 
   it('bounces a bad code back Home with an explanation', () => {
-    cy.intercept('GET', '/api/lobby/ZZ99ZZ', {
+    cy.intercept('POST', '/api/lobby/ZZ99ZZ/join', {
       statusCode: 404,
       body: { message: 'Lobby not found' },
-    }).as('getLobby')
+    }).as('joinLobby')
 
-    // Someone pasting a dead invite link straight into the address bar.
     cy.visit('/lobby/ZZ99ZZ')
-    cy.wait('@getLobby')
+    cy.wait('@joinLobby')
 
     cy.url().should('not.include', '/lobby/')
-    cy.contains('invalid or has expired').should('be.visible')
+    cy.get('[role="alert"]').should('have.text', 'Lobby not found')
     cy.get('[data-testid="create-lobby-button"]').should('be.visible')
   })
 
-  it('bounces Home rather than hanging when the lobby fails to load', () => {
-    cy.intercept('GET', '/api/lobby/AB12CD', { forceNetworkError: true }).as('getLobby')
+  it('bounces back Home when the lobby is full', () => {
+    cy.intercept('POST', '/api/lobby/FULL01/join', {
+      statusCode: 409,
+      body: { message: 'Lobby is full' },
+    }).as('joinLobby')
+
+    cy.visit('/lobby/FULL01')
+    cy.wait('@joinLobby')
+
+    cy.url().should('not.include', '/lobby/')
+    cy.get('[role="alert"]').should('have.text', 'Lobby is full')
+  })
+
+  it('bounces Home rather than hanging when the join fails to go through', () => {
+    cy.intercept('POST', '/api/lobby/AB12CD/join', { forceNetworkError: true }).as('joinLobby')
 
     cy.visit('/lobby/AB12CD')
 
     cy.url().should('not.include', '/lobby/')
-    cy.contains("Couldn't load that lobby").should('be.visible')
+    cy.contains("Couldn't join that lobby").should('be.visible')
     cy.get('[data-testid="lobby-loading"]').should('not.exist')
   })
 })
