@@ -92,6 +92,34 @@ function findMockLobby(code: string) {
   return mockLobbies.find((lobby) => lobby.lobbyCode === code)
 }
 
+/** mockLobby after a second (non-host) player has joined it. */
+export const mockJoinedLobby: LobbyResponse['data'] = {
+  ...mockLobby,
+  players: [
+    ...mockLobby.players,
+    { id: 'player-2', name: 'Guinevere', isHost: false, isReady: false },
+  ],
+}
+
+/** A lobby with every seat taken - joining it returns a 409. */
+export const mockFullLobby: LobbyResponse['data'] = {
+  lobbyCode: 'FULL01',
+  hostId: 'full-host',
+  maxPlayers: 4,
+  players: [
+    { id: 'full-host', name: 'Lancelot', isHost: true, isReady: true },
+    { id: 'full-2', name: 'Gawain', isHost: false, isReady: true },
+    { id: 'full-3', name: 'Percival', isHost: false, isReady: false },
+    { id: 'full-4', name: 'Galahad', isHost: false, isReady: true },
+  ],
+}
+
+const mockLobbies = [mockLobby, mockFullLobby]
+
+function findMockLobby(code: string) {
+  return mockLobbies.find((lobby) => lobby.lobbyCode === code)
+}
+
 export const handlers = [
   http.post<never, LoginCredentials, LoginResponse>(
     AUTH_ENDPOINTS.login,
