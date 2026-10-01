@@ -14,6 +14,7 @@ const lobby: LobbyData = {
 // Module-level singleton shared across tests - reset it each time.
 beforeEach(() => {
   useLobbyStore.getState().clearLobby()
+  useLobbyStore.getState().clearPendingJoin()
 })
 
 describe('lobbyStore', () => {
@@ -40,5 +41,22 @@ describe('lobbyStore', () => {
     useLobbyStore.getState().clearLobby()
 
     expect(useLobbyStore.getState().lobby).toBeNull()
+  })
+
+  it('starts with no pending join', () => {
+    expect(useLobbyStore.getState().pendingJoin).toBeNull()
+  })
+
+  it('stores and clears a pending join', () => {
+    const pendingJoin = {
+      code: 'AB12CD',
+      request: Promise.resolve({ status: 'SUCCESS', data: lobby }),
+    }
+
+    useLobbyStore.getState().setPendingJoin(pendingJoin)
+    expect(useLobbyStore.getState().pendingJoin).toBe(pendingJoin)
+
+    useLobbyStore.getState().clearPendingJoin()
+    expect(useLobbyStore.getState().pendingJoin).toBeNull()
   })
 })

@@ -5,7 +5,6 @@ interface JoinLobbyInputProps {
   /**
    * Called with the sanitized 6-character code once submitted — either by
    * clicking the button (manual path) or automatically (URL path).
-   * The actual join API call lives in Task #41; this is just a hook.
    */
   onSubmit: (code: string) => void;
   className?: string;

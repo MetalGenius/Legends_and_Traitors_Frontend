@@ -1,7 +1,10 @@
 import { act, renderHook, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import { useLobbyStore } from '@features/lobby/stores/lobbyStore'
+import { mockJoinedLobby } from '@mocks/handlers'
 
 import { useJoinLobby } from './useJoinLobby'
 
@@ -22,8 +25,13 @@ function wrapper({ children }: { children: ReactNode }) {
   )
 }
 
+beforeEach(() => {
+  useLobbyStore.getState().clearPendingJoin()
+})
+
 describe('useJoinLobby', () => {
-  it('navigates to the lobby for the given code', () => {
+  // The waiting room shows the loading state; Home doesn't wait on the API.
+  it('goes straight to the lobby for the given code', () => {
     const { result } = renderHook(() => useJoinLobby(), { wrapper })
 
     act(() => {
@@ -33,8 +41,20 @@ describe('useJoinLobby', () => {
     expect(screen.getByTestId('lobby-probe').textContent).toBe('AB12CD')
   })
 
-  // Sanitizing/validating the code is JoinLobbyInput's job (and #41's for the
-  // API check) - this hook passes through whatever it is handed.
+  it('hands the in-flight join request to the lobby page', async () => {
+    const { result } = renderHook(() => useJoinLobby(), { wrapper })
+
+    act(() => {
+      result.current.joinLobby('AB12CD')
+    })
+
+    const pendingJoin = useLobbyStore.getState().pendingJoin
+    expect(pendingJoin?.code).toBe('AB12CD')
+    expect((await pendingJoin!.request).data).toEqual(mockJoinedLobby)
+  })
+
+  // Sanitizing/validating the code is JoinLobbyInput's job - this hook passes
+  // through whatever it is handed.
   it('passes the code through untouched', () => {
     const { result } = renderHook(() => useJoinLobby(), { wrapper })
 
@@ -43,5 +63,6 @@ describe('useJoinLobby', () => {
     })
 
     expect(screen.getByTestId('lobby-probe').textContent).toBe('ab12cd')
+    expect(useLobbyStore.getState().pendingJoin?.code).toBe('ab12cd')
   })
 })

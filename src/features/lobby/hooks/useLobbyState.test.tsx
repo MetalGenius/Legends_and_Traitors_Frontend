@@ -4,14 +4,17 @@ import { useEffect, type ReactNode } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { LOBBY_ENDPOINTS } from '@features/lobby/api/lobbyApi'
+import { joinLobby, LOBBY_ENDPOINTS } from '@features/lobby/api/lobbyApi'
 import { useLobbyStore } from '@features/lobby/stores/lobbyStore'
-import { mockLobby } from '@mocks/handlers'
+import { mockFullLobby, mockJoinedLobby, mockLobby } from '@mocks/handlers'
 import { server } from '@mocks/server'
 
 import {
+  GAME_STARTED_MESSAGE,
   INVALID_CODE_MESSAGE,
+  JOIN_FAILED_MESSAGE,
   LOAD_FAILED_MESSAGE,
+  LOBBY_FULL_MESSAGE,
   useLobbyState,
 } from './useLobbyState'
 
@@ -50,6 +53,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   useLobbyStore.getState().clearLobby()
+  useLobbyStore.getState().clearPendingJoin()
   lastLocation = { pathname: '', lobbyError: null }
 })
 
@@ -149,6 +153,107 @@ describe('useLobbyState', () => {
       })
       expect(lastLocation.lobbyError).toBe(INVALID_CODE_MESSAGE)
       expect(result.current.isLoading).toBe(false)
+    })
+  })
+
+  describe('when the user just asked to join from Home', () => {
+    /** What useJoinLobby leaves behind before navigating here. */
+    function startJoin(code = 'AB12CD') {
+      const request = joinLobby(code)
+      request.catch(() => {})
+      useLobbyStore.getState().setPendingJoin({ code, request })
+    }
+
+    it('waits on the join instead of fetching, then stores the joined lobby', async () => {
+      let fetched = false
+      server.use(
+        http.get(LOBBY_ENDPOINTS.detail(':code'), () => {
+          fetched = true
+          return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
+        }),
+      )
+      startJoin()
+
+      const { result } = renderHook(() => useLobbyState('AB12CD'), { wrapper })
+
+      expect(result.current.isJoining).toBe(true)
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false)
+      })
+      expect(result.current.isJoining).toBe(false)
+      expect(useLobbyStore.getState().lobby).toEqual(mockJoinedLobby)
+      expect(lastLocation.pathname).toBe('/lobby/AB12CD')
+      expect(fetched).toBe(false)
+    })
+
+    it('spends the pending join once it settles', async () => {
+      startJoin()
+
+      const { result } = renderHook(() => useLobbyState('AB12CD'), { wrapper })
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false)
+      })
+      expect(useLobbyStore.getState().pendingJoin).toBeNull()
+    })
+
+    it('ignores a pending join for a different code and fetches instead', async () => {
+      startJoin('QQ11QQ')
+
+      const { result } = renderHook(() => useLobbyState('AB12CD'), { wrapper })
+
+      expect(result.current.isJoining).toBe(false)
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false)
+      })
+      expect(useLobbyStore.getState().lobby).toEqual(mockLobby)
+    })
+
+    it.each([
+      [404, INVALID_CODE_MESSAGE],
+      [409, LOBBY_FULL_MESSAGE],
+      [400, GAME_STARTED_MESSAGE],
+      [500, JOIN_FAILED_MESSAGE],
+    ])('redirects Home with the right message on a %i', async (status, message) => {
+      server.use(
+        http.post(LOBBY_ENDPOINTS.join(':code'), () =>
+          HttpResponse.json({ message: 'Nope' }, { status }),
+        ),
+      )
+      startJoin()
+
+      const { result } = renderHook(() => useLobbyState('AB12CD'), { wrapper })
+
+      await waitFor(() => {
+        expect(lastLocation.pathname).toBe('/')
+      })
+      expect(lastLocation.lobbyError).toBe(message)
+      expect(result.current.isLoading).toBe(false)
+      expect(useLobbyStore.getState().lobby).toBeNull()
+    })
+
+    it('redirects Home explaining the lobby is full when every seat is taken', async () => {
+      const code = mockFullLobby.lobbyCode
+      startJoin(code)
+
+      renderHook(() => useLobbyState(code), { wrapper })
+
+      await waitFor(() => {
+        expect(lastLocation.pathname).toBe('/')
+      })
+      expect(lastLocation.lobbyError).toBe(LOBBY_FULL_MESSAGE)
+    })
+
+    it('redirects Home with the join message on a network failure', async () => {
+      server.use(http.post(LOBBY_ENDPOINTS.join(':code'), () => HttpResponse.error()))
+      startJoin()
+
+      renderHook(() => useLobbyState('AB12CD'), { wrapper })
+
+      await waitFor(() => {
+        expect(lastLocation.pathname).toBe('/')
+      })
+      expect(lastLocation.lobbyError).toBe(JOIN_FAILED_MESSAGE)
     })
   })
 })
