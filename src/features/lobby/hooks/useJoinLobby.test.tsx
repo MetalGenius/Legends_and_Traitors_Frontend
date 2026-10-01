@@ -1,5 +1,4 @@
 import { act, renderHook, screen } from '@testing-library/react'
-import { http, HttpResponse } from 'msw'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
