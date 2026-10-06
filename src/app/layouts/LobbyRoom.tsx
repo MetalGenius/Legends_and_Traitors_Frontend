@@ -6,6 +6,7 @@ import {
   useLobbyState,
   useLobbyStore,
   usePlayerStore,
+  useReadyToggle,
   PlayerListItem,
 } from "@features/lobby";
 import { useSessionStore } from "@shared/lib/session";
@@ -27,11 +28,17 @@ export default function LobbyScreen({
   // display name (never the username handle).
   const playerName = usePlayerStore((state) => state.displayName);
   const accountName = useSessionStore((state) => state.account?.displayName);
+  const currentUserId = useSessionStore((state) => state.account?.id);
   const displayName = playerName ?? accountName ?? "";
 
   const lobbyCode = lobby?.lobbyCode ?? code ?? "";
   const inviteLink = `${window.location.origin}/lobby/${lobbyCode}`;
   const { copied, copyInviteLink } = useCopyInviteLink(inviteLink);
+  const {
+    toggleReady,
+    isSaving: isSavingReady,
+    error: readyError,
+  } = useReadyToggle(lobbyCode);
 
   return (
     <div className="min-h-screen w-full bg-black text-white flex flex-col">
@@ -106,9 +113,21 @@ export default function LobbyScreen({
             {/* Player cards */}
             <div className="flex flex-wrap justify-center gap-8 mb-15 mt-10">
               {lobby.players.map((player) => (
-                <PlayerListItem key={player.id} player={player} />
+                <PlayerListItem
+                  key={player.id}
+                  player={player}
+                  isCurrentUser={player.id === currentUserId}
+                  onToggleReady={toggleReady}
+                  isSavingReady={isSavingReady}
+                />
               ))}
             </div>
+
+            {readyError && (
+              <p className="text-center text-red-400 text-sm mb-6" role="alert">
+                {readyError}
+              </p>
+            )}
 
             {/* Action buttons */}
             <div className="flex items-center justify-center gap-10">

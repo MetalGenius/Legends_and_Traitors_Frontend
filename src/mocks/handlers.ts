@@ -77,7 +77,11 @@ export const mockLobby: LobbyResponse['data'] = {
   lobbyCode: 'AB12CD',
   hostId: mockHost.id,
   maxPlayers: 8,
-  players: [{ ...asPlayer(mockHost), isHost: true }],
+  players: [
+    { ...asPlayer(mockHost), isHost: true },
+    // Already ready, so the lobby shows both states before anyone toggles.
+    { id: 'player-2', username: 'Guinevere', isHost: false, isReady: true },
+  ],
 }
 
 /** mockLobby after the mock guest has joined it. */
@@ -102,10 +106,27 @@ export const mockFullLobby: LobbyResponse['data'] = {
   ],
 }
 
-const mockLobbies = [mockLobby, mockFullLobby]
+// The mock server's live state, so a join or a ready toggle sticks (and a
+// later GET sees it) like a real backend. Starts from copies of the fixtures
+// above, which stay untouched for tests to compare against.
+const lobbies = new Map<string, LobbyResponse['data']>()
+
+/** Puts every mock lobby back to its fixture. Runs after each test. */
+export function resetMockLobbies() {
+  lobbies.clear()
+  for (const lobby of [mockLobby, mockFullLobby]) {
+    lobbies.set(lobby.lobbyCode, structuredClone(lobby))
+  }
+}
+resetMockLobbies()
 
 function findMockLobby(code: string) {
-  return mockLobbies.find((lobby) => lobby.lobbyCode === code)
+  return lobbies.get(code)
+}
+
+function saveMockLobby(lobby: LobbyResponse['data']) {
+  lobbies.set(lobby.lobbyCode, lobby)
+  return lobby
 }
 
 export const handlers = [
@@ -137,7 +158,7 @@ export const handlers = [
       if (!auth) {
         return HttpResponse.json({
           status: 'SUCCESS',
-          data: mockLobby,
+          data: saveMockLobby(structuredClone(mockLobby)),
           guest: { token: mockHostToken, user: mockHost },
         })
       }
@@ -147,11 +168,11 @@ export const handlers = [
       }
       return HttpResponse.json({
         status: 'SUCCESS',
-        data: {
+        data: saveMockLobby({
           ...mockLobby,
           hostId: account.id,
           players: [{ ...asPlayer(account), isHost: true }],
-        },
+        }),
       })
     },
   ),
@@ -192,8 +213,40 @@ export const handlers = [
       }
       return HttpResponse.json({
         status: 'SUCCESS',
-        data: { ...lobby, players: [...lobby.players, asPlayer(account)] },
+        data: saveMockLobby({ ...lobby, players: [...lobby.players, asPlayer(account)] }),
         ...(auth ? {} : { guest: { token: mockGuestToken, user: mockGuest } }),
+      })
+    },
+  ),
+
+  // Only a player in the lobby can set their own ready flag.
+  http.patch<{ code: string }, { isReady: boolean }, LobbyResponse | ApiErrorBody>(
+    LOBBY_ENDPOINTS.ready(':code'),
+    async ({ params, request }) => {
+      const auth = request.headers.get('Authorization')
+      const account = auth ? accountFromToken(auth) : null
+      if (!account) {
+        return HttpResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      }
+      const lobby = findMockLobby(params.code)
+      if (!lobby) {
+        return HttpResponse.json({ message: 'Lobby not found' }, { status: 404 })
+      }
+      if (!lobby.players.some((player) => player.id === account.id)) {
+        return HttpResponse.json(
+          { message: "You're not a player in this lobby" },
+          { status: 403 },
+        )
+      }
+      const { isReady } = await request.json()
+      return HttpResponse.json({
+        status: 'SUCCESS',
+        data: saveMockLobby({
+          ...lobby,
+          players: lobby.players.map((player) =>
+            player.id === account.id ? { ...player, isReady } : player,
+          ),
+        }),
       })
     },
   ),

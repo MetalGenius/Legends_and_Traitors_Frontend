@@ -241,3 +241,61 @@ describe('Opening an invite link', () => {
     cy.get('[data-testid="lobby-loading"]').should('not.exist')
   })
 })
+
+describe('Ready toggle', () => {
+  beforeEach(() => {
+    // A guest already in ABC123 (with the host), arriving on a refresh.
+    cy.intercept('GET', '/api/lobby/ABC123', { body: joinedLobby() }).as('getLobby')
+    cy.visit('/lobby/ABC123', { onBeforeLoad: seedSession('guest-token', guest) })
+    cy.wait('@getLobby')
+  })
+
+  it("is the player's own card, and only that one", () => {
+    cy.get('[role="switch"]')
+      .should('have.length', 1)
+      .and('have.attr', 'data-testid', 'own-player-card')
+      .and('contain', guest.displayName)
+      .and('contain', 'Not Ready')
+    // The host's card shows its status too, but isn't a control.
+    cy.contains('[data-testid="player-ready-status"]', 'Not Ready')
+    cy.get('[data-testid="player-ready-status"]').should('have.length', 2)
+  })
+
+  it('flips instantly, before the server answers', () => {
+    cy.intercept('PATCH', '/api/lobby/ABC123/ready', (req) => {
+      expect(req.body).to.deep.equal({ isReady: true })
+      expect(req.headers.authorization).to.equal('Bearer guest-token')
+      const body = joinedLobby()
+      body.data.players[1].isReady = true
+      req.reply({ delay: 800, body })
+    }).as('setReady')
+
+    cy.get('[role="switch"]').click()
+
+    // Well inside the 800ms the server takes to answer.
+    cy.get('[role="switch"]', { timeout: 300 })
+      .should('have.attr', 'aria-checked', 'true')
+      .and('have.attr', 'aria-busy', 'true')
+      .find('[data-testid="player-ready-status"]')
+      .should('have.text', 'Ready')
+    cy.wait('@setReady')
+    cy.get('[role="switch"]')
+      .should('have.attr', 'aria-checked', 'true')
+      .and('have.attr', 'aria-busy', 'false')
+  })
+
+  it("flips back and shows the server's message when it's refused", () => {
+    cy.intercept('PATCH', '/api/lobby/ABC123/ready', {
+      delay: 300,
+      statusCode: 409,
+      body: { message: 'The game is starting' },
+    }).as('setReady')
+
+    cy.get('[role="switch"]').click()
+    cy.get('[role="switch"]').should('have.attr', 'aria-checked', 'true')
+    cy.wait('@setReady')
+
+    cy.get('[role="switch"]').should('have.attr', 'aria-checked', 'false')
+    cy.get('[role="alert"]').should('have.text', 'The game is starting')
+  })
+})

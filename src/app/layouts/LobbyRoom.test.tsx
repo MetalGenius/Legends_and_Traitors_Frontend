@@ -33,6 +33,11 @@ function renderLobby(props = {}, code = 'AB12CD') {
   )
 }
 
+/** The "Player (n/max)" heading LobbyRoom shows for this lobby. */
+function playerCount(lobby: LobbyData) {
+  return `Player (${lobby.players.length}/${lobby.maxPlayers})`
+}
+
 /**
  * Waits for the room to finish getting in (or redirect). Every test must: an
  * unfinished request for the same code would be reused by the next test.
@@ -81,7 +86,7 @@ describe('LobbyRoom', () => {
     renderLobby()
 
     expect(screen.getByTestId('lobby-loading').textContent).toBe('Joining lobby...')
-    expect(await screen.findByText('Player (2/8)')).toBeDefined()
+    expect(await screen.findByText(playerCount(mockJoinedLobby))).toBeDefined()
     expect(screen.queryByTestId('lobby-loading')).toBeNull()
     expect(screen.getByText('HostName')).toBeDefined()
     // The guest's own card, alongside the host's.
@@ -204,6 +209,64 @@ describe('LobbyRoom', () => {
 
       expect(within(screen.getByRole('banner')).getByTestId('header-display-name').textContent).toBe('')
       await settle()
+    })
+  })
+
+  describe('ready toggle', () => {
+    // The mock lobby (the signed-in host among them) plus a ready guest.
+    const lobbyWithGuest: LobbyData = {
+      ...mockLobby,
+      players: [
+        ...mockLobby.players,
+        { id: mockGuest.id, username: mockGuest.displayName, isHost: false, isReady: true },
+      ],
+    }
+
+    it("is only the current player's own card", async () => {
+      serveLobby(lobbyWithGuest)
+      renderLobby()
+
+      await screen.findByText(playerCount(lobbyWithGuest))
+      const toggles = screen.getAllByRole('switch')
+      expect(toggles).toHaveLength(1)
+      expect(toggles[0].textContent).toContain('HostName')
+      expect(toggles[0].getAttribute('aria-checked')).toBe('false')
+      // Every card still shows its status; the other player's can't be pressed.
+      const statuses = screen.getAllByTestId('player-ready-status')
+      expect(statuses.map((status) => status.textContent)).toEqual(
+        lobbyWithGuest.players.map((p) => (p.isReady ? 'Ready' : 'Not Ready')),
+      )
+    })
+
+    it('flips instantly when pressed, and stays flipped once saved', async () => {
+      renderLobby()
+      const toggle = await screen.findByRole('switch')
+
+      fireEvent.click(toggle)
+
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
+      expect(within(toggle).getByTestId('player-ready-status').textContent).toBe('Ready')
+      await waitFor(() => {
+        expect(toggle.getAttribute('aria-busy')).toBe('false')
+      })
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it("flips back and shows the server's message when saving fails", async () => {
+      server.use(
+        http.patch(LOBBY_ENDPOINTS.ready(':code'), () =>
+          HttpResponse.json({ message: 'The game is starting' }, { status: 409 }),
+        ),
+      )
+      renderLobby()
+      const toggle = await screen.findByRole('switch')
+
+      fireEvent.click(toggle)
+
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
+      expect((await screen.findByRole('alert')).textContent).toBe('The game is starting')
+      expect(toggle.getAttribute('aria-checked')).toBe('false')
     })
   })
 

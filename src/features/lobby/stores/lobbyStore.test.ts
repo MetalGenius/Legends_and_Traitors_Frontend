@@ -54,4 +54,30 @@ describe('lobbyStore', () => {
     useLobbyStore.getState().setJoiningCode(null)
     expect(useLobbyStore.getState().joiningCode).toBeNull()
   })
+
+  describe('setPlayerReady', () => {
+    const twoPlayers: LobbyData = {
+      ...lobby,
+      players: [
+        ...lobby.players,
+        { id: 'p2', username: 'Guinevere', isHost: false, isReady: false },
+      ],
+    }
+
+    it("changes only that player's ready flag", () => {
+      useLobbyStore.getState().setLobby(twoPlayers)
+
+      useLobbyStore.getState().setPlayerReady('p2', true)
+
+      const players = useLobbyStore.getState().lobby?.players
+      expect(players?.find((p) => p.id === 'p2')?.isReady).toBe(true)
+      expect(players?.find((p) => p.id === 'host-1')?.isReady).toBe(false)
+    })
+
+    it('does nothing without a lobby', () => {
+      useLobbyStore.getState().setPlayerReady('p2', true)
+
+      expect(useLobbyStore.getState().lobby).toBeNull()
+    })
+  })
 })

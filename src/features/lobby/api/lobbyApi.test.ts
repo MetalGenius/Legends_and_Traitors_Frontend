@@ -7,6 +7,7 @@ import {
   mockGuestSession,
   mockGuestToken,
   mockHost,
+  mockHostSession,
   mockHostToken,
   mockJoinedLobby,
   mockLobby,
@@ -16,7 +17,14 @@ import {
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
 
-import { ApiError, createLobby, getLobbyState, joinLobby, LOBBY_ENDPOINTS } from './lobbyApi'
+import {
+  ApiError,
+  createLobby,
+  getLobbyState,
+  joinLobby,
+  LOBBY_ENDPOINTS,
+  setReadyState,
+} from './lobbyApi'
 
 describe('lobbyApi.createLobby', () => {
   it('returns the server data on success', async () => {
@@ -289,5 +297,52 @@ describe('lobby requests', () => {
     await createLobby()
 
     expect(hasAuthorization).toBe(false)
+  })
+})
+
+describe('lobbyApi.setReadyState', () => {
+  it("sets the current player's flag and returns the updated lobby", async () => {
+    const { token, account } = mockHostSession
+    useSessionStore.getState().setSession(token, account)
+
+    const result = await setReadyState(mockLobby.lobbyCode, true)
+
+    expect(result.data.players.find((p) => p.id === account.id)?.isReady).toBe(true)
+  })
+
+  it('sends the new state as a PATCH to the ready endpoint, with the token', async () => {
+    const { token, account } = mockHostSession
+    useSessionStore.getState().setSession(token, account)
+    let sent: { method: string; path: string; body: unknown; auth: string | null } | null = null
+    server.use(
+      http.patch(LOBBY_ENDPOINTS.ready(':code'), async ({ request }) => {
+        sent = {
+          method: request.method,
+          path: new URL(request.url).pathname,
+          body: await request.json(),
+          auth: request.headers.get('Authorization'),
+        }
+        return HttpResponse.json({ status: 'SUCCESS', data: mockLobby })
+      }),
+    )
+
+    await setReadyState('QQ11QQ', false)
+
+    expect(sent).toEqual({
+      method: 'PATCH',
+      path: '/api/lobby/QQ11QQ/ready',
+      body: { isReady: false },
+      auth: `Bearer ${token}`,
+    })
+  })
+
+  it('throws a 403 ApiError for someone not in the lobby', async () => {
+    const { token, account } = mockGuestSession
+    useSessionStore.getState().setSession(token, account)
+
+    const error = await setReadyState(mockLobby.lobbyCode, true).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error).toMatchObject({ status: 403 })
   })
 })

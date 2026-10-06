@@ -9,6 +9,7 @@ export const LOBBY_ENDPOINTS = {
   create: '/api/lobby',
   detail: (code: string) => `/api/lobby/${code}`,
   join: (code: string) => `/api/lobby/${code}/join`,
+  ready: (code: string) => `/api/lobby/${code}/ready`,
 } as const
 
 /** A request that reached the server and came back with a non-2xx status. */
@@ -81,4 +82,17 @@ export function getLobbyState(code: string): Promise<LobbyResponse> {
  */
 export function joinLobby(code: string): Promise<LobbyResponseWithGuest> {
   return request<LobbyResponseWithGuest>(LOBBY_ENDPOINTS.join(code), { method: 'POST' })
+}
+
+/**
+ * Sets the current player's ready flag in the lobby (the server knows who
+ * from the token) and returns the updated lobby. Throws an ApiError with 403
+ * if the player isn't in that lobby, 404 if the lobby is gone.
+ */
+export function setReadyState(lobbyCode: string, isReady: boolean): Promise<LobbyResponse> {
+  return request<LobbyResponse>(LOBBY_ENDPOINTS.ready(lobbyCode), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isReady }),
+  })
 }
