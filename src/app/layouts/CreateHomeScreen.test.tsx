@@ -4,12 +4,23 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { LOBBY_ENDPOINTS, useLobbyStore, usePlayerStore } from '@features/lobby'
-import { mockGuest, mockGuestToken, mockHost } from '@mocks/handlers'
+import {
+  mockGuest,
+  mockGuestToken,
+  mockHost,
+  mockJoinedLobby,
+  mockLobby,
+} from '@mocks/handlers'
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
 
 import CreateHomeScreen from './CreateHomeScreen'
 import LobbyRoom from './LobbyRoom'
+
+/** The "Player (n/max)" heading LobbyRoom shows for this lobby. */
+function playerCount(lobby: { players: unknown[]; maxPlayers: number }) {
+  return `Player (${lobby.players.length}/${lobby.maxPlayers})`
+}
 
 // The lobby store is a module-level singleton shared across tests - reset it
 // so one test's created lobby can't leak into the next.
@@ -126,7 +137,7 @@ describe('CreateHomeScreen', () => {
         fireEvent.click(getButton())
       })
 
-      expect(await screen.findByText('Player (1/8)')).toBeDefined()
+      expect(await screen.findByText(playerCount(mockLobby))).toBeDefined()
       expect(screen.getByTestId('header-display-name').textContent).toBe(mockHost.displayName)
       expect(sent).toEqual(['POST /api/lobby', 'GET /api/lobby/AB12CD'])
       server.events.removeAllListeners()
@@ -152,7 +163,7 @@ describe('CreateHomeScreen', () => {
       })
       fireEvent.click(screen.getByTestId('join-lobby-submit'))
 
-      expect(await screen.findByText('Player (2/8)')).toBeDefined()
+      expect(await screen.findByText(playerCount(mockJoinedLobby))).toBeDefined()
       expect(screen.getByTestId('header-display-name').textContent).toBe(
         mockGuest.displayName,
       )

@@ -1,6 +1,7 @@
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest'
 
+import { resetMockLobbies } from '@mocks/handlers'
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
 
@@ -22,6 +23,8 @@ afterEach(() => {
   // Drop per-test `server.use()` overrides so a failure case can't leak into
   // the next test.
   server.resetHandlers()
+  // Joins and ready toggles change the mock server's lobbies; start fresh.
+  resetMockLobbies()
   // The session store persists here; don't let it leak into the next test.
   localStorage.clear()
 })
