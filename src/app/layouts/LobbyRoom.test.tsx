@@ -17,6 +17,7 @@ import {
   mockLobby,
 } from '@mocks/handlers'
 import { server } from '@mocks/server'
+import { MAX_PLAYERS } from '@shared/config/game'
 import { useSessionStore } from '@shared/lib/session'
 
 import LobbyRoom from './LobbyRoom'
@@ -35,7 +36,7 @@ function renderLobby(props = {}, code = 'AB12CD') {
 
 /** The "Player (n/max)" heading LobbyRoom shows for this lobby. */
 function playerCount(lobby: LobbyData) {
-  return `Player (${lobby.players.length}/${lobby.maxPlayers})`
+  return `Player (${lobby.players.length}/${MAX_PLAYERS})`
 }
 
 /**
@@ -108,19 +109,29 @@ describe('LobbyRoom', () => {
     expect(screen.queryByTestId('lobby-loading')).toBeNull()
   })
 
-  it('shows the player count from the server, not a placeholder', async () => {
+  it('shows how many of the fixed seats are taken, from the real player list', async () => {
     serveLobby({
       ...mockLobby,
-      maxPlayers: 6,
       players: [
         { id: '1', username: 'Arthur', isHost: true, isReady: false },
         { id: '2', username: 'Lancelot', isHost: false, isReady: true },
+        { id: '3', username: 'Gawain', isHost: false, isReady: true },
       ],
     })
 
     renderLobby()
 
-    expect(await screen.findByText('Player (2/6)')).toBeDefined()
+    expect(await screen.findByText(`Player (3/${MAX_PLAYERS})`)).toBeDefined()
+  })
+
+  it('ignores a different maximum if the server still sends one', async () => {
+    // An older backend might keep sending a per-lobby size; the rule wins.
+    serveLobby({ ...mockLobby, maxPlayers: 4 } as LobbyData)
+
+    renderLobby()
+
+    expect(await screen.findByText(playerCount(mockLobby))).toBeDefined()
+    expect(screen.queryByText(`Player (${mockLobby.players.length}/4)`)).toBeNull()
   })
 
   it("renders a card per player, with the host's crown", async () => {

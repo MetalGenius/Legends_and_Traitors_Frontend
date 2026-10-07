@@ -7,7 +7,6 @@ import { useLobbyStore } from './lobbyStore'
 const lobby: LobbyData = {
   lobbyCode: 'AB12CD',
   hostId: 'host-1',
-  maxPlayers: 8,
   players: [{ id: 'host-1', username: 'HostName', isHost: true, isReady: false }],
 }
 
@@ -30,10 +29,10 @@ describe('lobbyStore', () => {
 
   it('replaces an existing lobby rather than merging into it', () => {
     useLobbyStore.getState().setLobby(lobby)
-    useLobbyStore.getState().setLobby({ ...lobby, lobbyCode: 'ZZ99ZZ', maxPlayers: 4 })
+    useLobbyStore.getState().setLobby({ ...lobby, lobbyCode: 'ZZ99ZZ', hostId: 'host-2' })
 
     expect(useLobbyStore.getState().lobby?.lobbyCode).toBe('ZZ99ZZ')
-    expect(useLobbyStore.getState().lobby?.maxPlayers).toBe(4)
+    expect(useLobbyStore.getState().lobby?.hostId).toBe('host-2')
   })
 
   it('clears the lobby back to null', () => {

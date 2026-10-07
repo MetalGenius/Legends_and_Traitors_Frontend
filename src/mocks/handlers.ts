@@ -14,6 +14,7 @@ import {
   type LobbyResponse,
   type LobbyResponseWithGuest,
 } from '@features/lobby'
+import { MAX_PLAYERS } from '@shared/config/game'
 import type { SessionAccount } from '@shared/lib/session'
 
 // Default (happy-path) handlers shared by every test. A test that needs a
@@ -76,7 +77,6 @@ function asPlayer(account: { id: string; displayName: string }): LobbyPlayer {
 export const mockLobby: LobbyResponse['data'] = {
   lobbyCode: 'AB12CD',
   hostId: mockHost.id,
-  maxPlayers: 8,
   players: [
     { ...asPlayer(mockHost), isHost: true },
     // Already ready, so the lobby shows both states before anyone toggles.
@@ -93,17 +93,19 @@ export const mockJoinedLobby: LobbyResponse['data'] = {
   ],
 }
 
+const KNIGHTS = ['Lancelot', 'Gawain', 'Percival', 'Galahad', 'Bors', 'Tristan', 'Gareth', 'Bedivere']
+
 /** A lobby with every seat taken - joining it returns a 409. */
 export const mockFullLobby: LobbyResponse['data'] = {
   lobbyCode: 'FULL01',
   hostId: 'full-host',
-  maxPlayers: 4,
-  players: [
-    { id: 'full-host', username: 'Lancelot', isHost: true, isReady: true },
-    { id: 'full-2', username: 'Gawain', isHost: false, isReady: true },
-    { id: 'full-3', username: 'Percival', isHost: false, isReady: false },
-    { id: 'full-4', username: 'Galahad', isHost: false, isReady: true },
-  ],
+  // Exactly MAX_PLAYERS, so it stays full whatever that's set to.
+  players: Array.from({ length: MAX_PLAYERS }, (_, i) => ({
+    id: i === 0 ? 'full-host' : `full-${i + 1}`,
+    username: KNIGHTS[i % KNIGHTS.length],
+    isHost: i === 0,
+    isReady: i % 3 !== 2,
+  })),
 }
 
 // The mock server's live state, so a join or a ready toggle sticks (and a
@@ -208,7 +210,7 @@ export const handlers = [
       if (lobby.players.some((player) => player.id === account.id)) {
         return HttpResponse.json({ status: 'SUCCESS', data: lobby })
       }
-      if (lobby.players.length >= lobby.maxPlayers) {
+      if (lobby.players.length >= MAX_PLAYERS) {
         return HttpResponse.json({ message: 'Lobby is full' }, { status: 409 })
       }
       return HttpResponse.json({

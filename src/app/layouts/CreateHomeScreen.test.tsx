@@ -12,14 +12,15 @@ import {
   mockLobby,
 } from '@mocks/handlers'
 import { server } from '@mocks/server'
+import { MAX_PLAYERS } from '@shared/config/game'
 import { useSessionStore } from '@shared/lib/session'
 
 import CreateHomeScreen from './CreateHomeScreen'
 import LobbyRoom from './LobbyRoom'
 
 /** The "Player (n/max)" heading LobbyRoom shows for this lobby. */
-function playerCount(lobby: { players: unknown[]; maxPlayers: number }) {
-  return `Player (${lobby.players.length}/${lobby.maxPlayers})`
+function playerCount(lobby: { players: unknown[] }) {
+  return `Player (${lobby.players.length}/${MAX_PLAYERS})`
 }
 
 // The lobby store is a module-level singleton shared across tests - reset it
