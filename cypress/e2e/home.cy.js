@@ -10,7 +10,6 @@ function lobby(code, overrides = {}) {
     data: {
       lobbyCode: code,
       hostId: 'host-1',
-      maxPlayers: 8,
       players: [{ id: 'host-1', username: 'HostName', isHost: true, isReady: false }],
       ...overrides,
     },

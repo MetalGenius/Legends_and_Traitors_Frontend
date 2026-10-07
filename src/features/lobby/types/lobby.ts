@@ -14,7 +14,8 @@ export interface LobbyPlayer {
 export interface LobbyData {
   lobbyCode: string
   hostId: string
-  maxPlayers: number
+  // No maxPlayers: every lobby has the same size, MAX_PLAYERS in
+  // src/shared/config/game.ts.
   players: LobbyPlayer[]
 }
 

@@ -9,6 +9,7 @@ import {
   useReadyToggle,
   PlayerListItem,
 } from "@features/lobby";
+import { MAX_PLAYERS } from "@shared/config/game";
 import { useSessionStore } from "@shared/lib/session";
 
 interface LobbyScreenProps {
@@ -107,7 +108,7 @@ export default function LobbyScreen({
               className="text-3xl mb-5 font-bold"
               style={{ fontFamily: "Instrument Serif, serif" }}
             >
-              Player ({lobby.players.length}/{lobby.maxPlayers})
+              Player ({lobby.players.length}/{MAX_PLAYERS})
             </p>
 
             {/* Player cards */}
