@@ -79,8 +79,11 @@ export const mockLobby: LobbyResponse['data'] = {
   hostId: mockHost.id,
   players: [
     { ...asPlayer(mockHost), isHost: true },
-    // Already ready, so the lobby shows both states before anyone toggles.
+    // The others are already ready: MIN_PLAYERS (4) are here, so once the
+    // host readies up they can start - enough to try the whole flow in dev.
     { id: 'player-2', username: 'Guinevere', isHost: false, isReady: true },
+    { id: 'player-3', username: 'Lancelot', isHost: false, isReady: true },
+    { id: 'player-4', username: 'Gawain', isHost: false, isReady: true },
   ],
 }
 

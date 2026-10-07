@@ -161,15 +161,6 @@ describe('LobbyRoom', () => {
     expect(await screen.findByText('Copied!')).toBeDefined()
   })
 
-  it('calls onStartGame when Start Game is clicked', async () => {
-    const onStartGame = vi.fn()
-    renderLobby({ onStartGame })
-
-    fireEvent.click(await screen.findByText('Start Game'))
-
-    expect(onStartGame).toHaveBeenCalledTimes(1)
-  })
-
   it('calls onLeaveGame when Leave Game is clicked', async () => {
     const onLeaveGame = vi.fn()
     renderLobby({ onLeaveGame })
@@ -278,6 +269,87 @@ describe('LobbyRoom', () => {
       expect(toggle.getAttribute('aria-checked')).toBe('true')
       expect((await screen.findByRole('alert')).textContent).toBe('The game is starting')
       expect(toggle.getAttribute('aria-checked')).toBe('false')
+    })
+  })
+
+  describe('Start Game', () => {
+    /** mockLobby with every player ready - startable. */
+    const allReady: LobbyData = {
+      ...mockLobby,
+      players: mockLobby.players.map((player) => ({ ...player, isReady: true })),
+    }
+
+    it('is shown to the host', async () => {
+      serveLobby(allReady)
+      renderLobby()
+
+      expect(await screen.findByRole('button', { name: 'Start Game' })).toBeDefined()
+    })
+
+    it('is not shown to anyone else', async () => {
+      // A guest who is a player, but not the host.
+      const { token, account } = mockGuestSession
+      useSessionStore.getState().setSession(token, account)
+      serveLobby({
+        ...allReady,
+        players: [
+          ...allReady.players,
+          { id: mockGuest.id, username: mockGuest.displayName, isHost: false, isReady: true },
+        ],
+      })
+      renderLobby()
+
+      await screen.findByText('Leave Game')
+      expect(screen.queryByRole('button', { name: 'Start Game' })).toBeNull()
+    })
+
+    it('starts the game once enough players are all ready', async () => {
+      const onStartGame = vi.fn()
+      serveLobby(allReady)
+      renderLobby({ onStartGame })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Start Game' }))
+
+      expect(onStartGame).toHaveBeenCalledTimes(1)
+    })
+
+    it('waits, saying why, while anyone is not ready', async () => {
+      const onStartGame = vi.fn()
+      // The default mock lobby: enough players, but the host isn't ready.
+      renderLobby({ onStartGame })
+
+      const start = await screen.findByRole('button', { name: 'Start Game' })
+      fireEvent.click(start)
+
+      expect(onStartGame).not.toHaveBeenCalled()
+      expect(start.getAttribute('aria-disabled')).toBe('true')
+      expect(screen.getByRole('tooltip').textContent).toBe('Waiting for all players to be ready')
+    })
+
+    it('says more players are needed below the minimum', async () => {
+      serveLobby({ ...allReady, players: allReady.players.slice(0, 2) })
+      renderLobby()
+
+      await screen.findByRole('button', { name: 'Start Game' })
+      expect(screen.getByRole('tooltip').textContent).toBe('Need at least 4 players')
+    })
+
+    it('becomes available as soon as the host readies up', async () => {
+      const onStartGame = vi.fn()
+      renderLobby({ onStartGame })
+      const start = await screen.findByRole('button', { name: 'Start Game' })
+      expect(start.getAttribute('aria-disabled')).toBe('true')
+
+      // The host's own card is their ready switch.
+      fireEvent.click(screen.getByRole('switch'))
+
+      expect(start.getAttribute('aria-disabled')).toBe('false')
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      fireEvent.click(start)
+      expect(onStartGame).toHaveBeenCalledTimes(1)
+      await waitFor(() => {
+        expect(screen.getByRole('switch').getAttribute('aria-busy')).toBe('false')
+      })
     })
   })
 
