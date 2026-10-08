@@ -298,3 +298,56 @@ describe('Ready toggle', () => {
     cy.get('[role="alert"]').should('have.text', 'The game is starting')
   })
 })
+
+describe('Start Game', () => {
+  /** A lobby of `count` players; the host is host-1. */
+  function lobbyOf(count, { allReady }) {
+    const names = ['HostName', 'Guinevere', 'Lancelot', 'Gawain', 'Percival']
+    return lobby('ABC123', {
+      players: names.slice(0, count).map((name, i) => ({
+        id: i === 0 ? host.id : `player-${i + 1}`,
+        username: name,
+        isHost: i === 0,
+        isReady: allReady,
+      })),
+    })
+  }
+
+  function visitAs(account, token, body) {
+    cy.intercept('GET', '/api/lobby/ABC123', { body }).as('getLobby')
+    cy.visit('/lobby/ABC123', { onBeforeLoad: seedSession(token, account) })
+    cy.wait('@getLobby')
+  }
+
+  it('is only shown to the host', () => {
+    const body = lobbyOf(4, { allReady: true })
+    body.data.players.push({ id: guest.id, username: guest.displayName, isHost: false, isReady: true })
+    visitAs(guest, 'guest-token', body)
+
+    cy.contains('button', 'Leave Game').should('be.visible')
+    cy.get('[data-testid="start-game-button"]').should('not.exist')
+  })
+
+  it('is enabled for the host once at least 4 players are all ready', () => {
+    visitAs(host, 'host-token', lobbyOf(4, { allReady: true }))
+
+    cy.get('[data-testid="start-game-button"]').should('have.attr', 'aria-disabled', 'false')
+    cy.get('[role="tooltip"]').should('not.exist')
+  })
+
+  it('explains why it is disabled when there are too few players', () => {
+    visitAs(host, 'host-token', lobbyOf(3, { allReady: true }))
+
+    cy.get('[data-testid="start-game-button"]')
+      .should('have.attr', 'aria-disabled', 'true')
+      .and('have.attr', 'aria-describedby')
+    cy.get('[role="tooltip"]').should('have.text', 'Need at least 4 players')
+  })
+
+  it('explains why it is disabled while anyone is not ready', () => {
+    visitAs(host, 'host-token', lobbyOf(5, { allReady: false }))
+
+    cy.get('[data-testid="start-game-button"]').should('have.attr', 'aria-disabled', 'true')
+    cy.get('[role="tooltip"]').should('have.text', 'Waiting for all players to be ready')
+  })
+})

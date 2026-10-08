@@ -5,3 +5,6 @@
 
 /** Seats in every lobby, host included. */
 export const MAX_PLAYERS = 8
+
+/** Fewest players a game can start with. The host needn't wait for a full lobby. */
+export const MIN_PLAYERS = 4

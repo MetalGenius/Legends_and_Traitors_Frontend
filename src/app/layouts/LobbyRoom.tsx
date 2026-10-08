@@ -8,6 +8,7 @@ import {
   usePlayerStore,
   useReadyToggle,
   PlayerListItem,
+  StartGameButton,
 } from "@features/lobby";
 import { MAX_PLAYERS } from "@shared/config/game";
 import { useSessionStore } from "@shared/lib/session";
@@ -31,6 +32,11 @@ export default function LobbyScreen({
   const accountName = useSessionStore((state) => state.account?.displayName);
   const currentUserId = useSessionStore((state) => state.account?.id);
   const displayName = playerName ?? accountName ?? "";
+
+  // Only the host gets a Start Game button.
+  const isHost = Boolean(
+    lobby?.players.some((player) => player.id === currentUserId && player.isHost),
+  );
 
   const lobbyCode = lobby?.lobbyCode ?? code ?? "";
   const inviteLink = `${window.location.origin}/lobby/${lobbyCode}`;
@@ -132,13 +138,9 @@ export default function LobbyScreen({
 
             {/* Action buttons */}
             <div className="flex items-center justify-center gap-10">
-              <button
-                type="button"
-                onClick={onStartGame}
-                className="bg-[#f9b658] hover:bg-[#ffc670] text-white !font-extrabold text-xl tracking-wide uppercase px-14 py-5 rounded-md transition-transform duration-150 hover:scale-[1.03] active:scale-95"
-              >
-                Start Game
-              </button>
+              {isHost && (
+                <StartGameButton players={lobby.players} onStart={onStartGame} />
+              )}
               <button
                 type="button"
                 onClick={onLeaveGame}
