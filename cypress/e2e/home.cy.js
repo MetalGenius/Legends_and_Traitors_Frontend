@@ -355,12 +355,12 @@ describe('Start Game', () => {
 /**
  * Swaps the page's WebSocket for a fake before the app loads (the preview
  * build has no MSW and nothing serves /ws). Records what the app sends on
- * `win.fakeSocket.sent`; `win.fakeSocket.push(event, data)` plays the server.
+ * `win.fakeSocket.sent`; `win.fakeSocket.push({ event, room, data })` plays
+ * the server.
  */
 function installFakeSocket(win) {
   const socket = { sent: [], instance: null }
-  socket.push = (event, data) =>
-    socket.instance.onmessage?.({ data: JSON.stringify({ event, data }) })
+  socket.push = (message) => socket.instance.onmessage?.({ data: JSON.stringify(message) })
   win.fakeSocket = socket
   win.WebSocket = class {
     constructor(url) {
@@ -396,7 +396,7 @@ describe('Live ready updates', () => {
   it('joins the lobby room over one connection, carrying the token', () => {
     cy.window()
       .its('fakeSocket.sent')
-      .should('deep.include', { event: 'join_room', data: { room: 'lobby:ABC123' } })
+      .should('deep.include', { event: 'join_room', room: 'lobby:ABC123' })
     cy.window()
       .its('fakeSocket.instance.url')
       .should('match', /\/ws\?token=guest-token$/)
@@ -408,15 +408,37 @@ describe('Live ready updates', () => {
     cy.get('[data-testid="player-ready-status"]').first().should('have.text', 'Not Ready')
 
     cy.window().then((win) =>
-      win.fakeSocket.push('player_ready_changed', {
-        lobbyCode: 'ABC123',
-        playerId: host.id,
-        isReady: true,
+      win.fakeSocket.push({
+        event: 'player_ready_changed',
+        room: 'lobby:ABC123',
+        data: { playerId: host.id, isReady: true },
       }),
     )
 
     cy.get('[data-testid="player-ready-status"]').first().should('have.text', 'Ready')
     // Our own card is untouched.
     cy.get('[role="switch"]').should('have.attr', 'aria-checked', 'false')
+  })
+
+  it("ignores a change announced for another lobby's room", () => {
+    cy.window().its('fakeSocket.sent').should('have.length.at.least', 1)
+
+    cy.window().then((win) => {
+      // Same event, same player id - but addressed to a different lobby.
+      win.fakeSocket.push({
+        event: 'player_ready_changed',
+        room: 'lobby:ZZZ999',
+        data: { playerId: host.id, isReady: true },
+      })
+      // Then one for this lobby: once it shows, the first has been handled.
+      win.fakeSocket.push({
+        event: 'player_ready_changed',
+        room: 'lobby:ABC123',
+        data: { playerId: guest.id, isReady: true },
+      })
+    })
+
+    cy.get('[role="switch"]').should('have.attr', 'aria-checked', 'true')
+    cy.get('[data-testid="player-ready-status"]').first().should('have.text', 'Not Ready')
   })
 })

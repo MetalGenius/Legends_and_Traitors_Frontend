@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LOBBY_ENDPOINTS } from '@features/lobby/api/lobbyApi'
 import { useLobbyStore } from '@features/lobby/stores/lobbyStore'
@@ -13,6 +13,7 @@ import {
 } from '@mocks/handlers'
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
+import { subscribe } from '@shared/lib/socket'
 
 import { lobbyRoom, PLAYER_READY_CHANGED, useLobbySocket } from './useLobbySocket'
 
@@ -51,7 +52,7 @@ describe('useLobbySocket', () => {
   it("merges another player's ready change into the lobby", async () => {
     await renderSubscribed()
 
-    announce({ lobbyCode: code, playerId: guinevere.id, isReady: false })
+    announce({ playerId: guinevere.id, isReady: false })
 
     await waitFor(() => {
       expect(readyOf(guinevere.id)).toBe(false)
@@ -62,7 +63,7 @@ describe('useLobbySocket', () => {
     const before = structuredClone(useLobbyStore.getState().lobby!)
     await renderSubscribed()
 
-    announce({ lobbyCode: code, playerId: guinevere.id, isReady: false })
+    announce({ playerId: guinevere.id, isReady: false })
 
     await waitFor(() => {
       expect(readyOf(guinevere.id)).toBe(false)
@@ -81,7 +82,7 @@ describe('useLobbySocket', () => {
       await renderSubscribed()
 
       announce(data)
-      announce({ lobbyCode: code, playerId: lancelot.id, isReady: false })
+      announce({ playerId: lancelot.id, isReady: false })
 
       await waitFor(() => {
         expect(readyOf(lancelot.id)).toBe(false)
@@ -89,17 +90,33 @@ describe('useLobbySocket', () => {
       expect(readyOf(guinevere.id)).toBe(true)
     }
 
-    it('events about another lobby', async () => {
-      await expectIgnored({ lobbyCode: 'QQ11QQ', playerId: guinevere.id, isReady: false })
+    it("another lobby's events on the same connection", async () => {
+      // Something else on the shared socket is listening to a second lobby,
+      // so the server sends this client that lobby's events too.
+      const otherRoom = lobbyRoom('QQ11QQ')
+      const heardInOtherLobby = vi.fn()
+      subscribe(otherRoom, PLAYER_READY_CHANGED, heardInOtherLobby)
+      await renderSubscribed()
+      await waitFor(() => {
+        expect(joinedRooms()).toContain(otherRoom)
+      })
+
+      broadcastToRoom(otherRoom, PLAYER_READY_CHANGED, { playerId: guinevere.id, isReady: false })
+
+      // It arrived, and went to the other lobby's listener alone.
+      await waitFor(() => {
+        expect(heardInOtherLobby).toHaveBeenCalledTimes(1)
+      })
+      expect(readyOf(guinevere.id)).toBe(true)
     })
 
     it('events missing fields', async () => {
-      await expectIgnored({ lobbyCode: code, playerId: guinevere.id })
+      await expectIgnored({ playerId: guinevere.id })
     })
 
     it('players not in the lobby', async () => {
       const before = structuredClone(useLobbyStore.getState().lobby!.players)
-      await expectIgnored({ lobbyCode: code, playerId: 'stranger', isReady: false })
+      await expectIgnored({ playerId: 'stranger', isReady: false })
 
       // Nobody was added for the stranger.
       expect(useLobbyStore.getState().lobby!.players.map((p) => p.id)).toEqual(
@@ -112,7 +129,7 @@ describe('useLobbySocket', () => {
       const elsewhere = { ...mockLobby, lobbyCode: 'QQ11QQ' }
       useLobbyStore.getState().setLobby(elsewhere)
 
-      announce({ lobbyCode: code, playerId: guinevere.id, isReady: false })
+      announce({ playerId: guinevere.id, isReady: false })
       await new Promise((resolve) => setTimeout(resolve, 20))
 
       expect(useLobbyStore.getState().lobby).toEqual(elsewhere)

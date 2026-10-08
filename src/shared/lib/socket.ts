@@ -7,9 +7,10 @@ import { useSessionStore } from './session'
  * the rest, and closes it once nobody is listening.
  *
  * PROVISIONAL PROTOCOL - the backend hasn't chosen one. Assumed: a plain
- * WebSocket carrying JSON `{ event, data }` messages, rooms joined with
- * `join_room` / `leave_room` and `{ room }`. Switching to e.g. Socket.IO
- * should only mean rewriting this file.
+ * WebSocket carrying JSON `{ event, room, data }` messages. The room is part
+ * of every message, both ways: we send `join_room` / `leave_room` naming
+ * one, and each event the server sends names the room it is for. Switching
+ * to e.g. Socket.IO should only mean rewriting this file.
  */
 
 type Handler = (data: unknown) => void
@@ -22,6 +23,7 @@ interface Subscription {
 
 interface Envelope {
   event: string
+  room: string
   data?: unknown
 }
 
@@ -62,21 +64,18 @@ function send(message: Envelope) {
 }
 
 function dispatch(raw: unknown) {
-  let message: Envelope
+  let message: Partial<Envelope> | null
   try {
-    message = JSON.parse(String(raw)) as Envelope
+    message = JSON.parse(String(raw)) as Partial<Envelope> | null
   } catch {
     return // Not ours to understand.
   }
-  if (typeof message?.event !== 'string') return
+  // Rooms are kept apart here, once, so no feature has to check whose event
+  // it was handed. A message naming no room reaches nobody - never everybody.
+  if (typeof message?.event !== 'string' || typeof message.room !== 'string') return
 
-  // If the server names the room, only that room's subscribers hear it.
-  const data = message.data as { room?: unknown } | undefined
-  const room = typeof data?.room === 'string' ? data.room : null
   for (const sub of subscriptions) {
-    if (sub.event === message.event && (room === null || sub.room === room)) {
-      sub.handler(message.data)
-    }
+    if (sub.event === message.event && sub.room === message.room) sub.handler(message.data)
   }
 }
 
@@ -91,7 +90,7 @@ function connect() {
     retries = 0
     // Covers both cases: rooms subscribed before the first open, and rooms
     // the server forgot when the connection dropped.
-    for (const room of roomCounts.keys()) send({ event: 'join_room', data: { room } })
+    for (const room of roomCounts.keys()) send({ event: 'join_room', room })
     if (hasOpened) for (const listener of reconnectListeners) listener()
     hasOpened = true
   }
@@ -125,8 +124,10 @@ function disconnect() {
 
 /**
  * Listens for `event` in `room`, joining the room (and opening the shared
- * connection) if needed. Returns a function that stops listening, leaving the
- * room - and closing the connection - when nothing else needs them.
+ * connection) if needed. The handler only ever gets events sent for `room`:
+ * another room's are never passed on, even for the same event. Returns a
+ * function that stops listening, leaving the room - and closing the
+ * connection - when nothing else needs them.
  */
 export function subscribe(room: string, event: string, handler: Handler): () => void {
   const sub: Subscription = { room, event, handler }
@@ -139,7 +140,7 @@ export function subscribe(room: string, event: string, handler: Handler): () => 
     hasOpened = false
     connect() // Joins every room, this one included, once open.
   } else if (count === 0) {
-    send({ event: 'join_room', data: { room } })
+    send({ event: 'join_room', room })
   }
 
   return () => {
@@ -149,7 +150,7 @@ export function subscribe(room: string, event: string, handler: Handler): () => 
       roomCounts.set(room, remaining)
     } else {
       roomCounts.delete(room)
-      send({ event: 'leave_room', data: { room } })
+      send({ event: 'leave_room', room })
     }
     if (subscriptions.size === 0) disconnect()
   }

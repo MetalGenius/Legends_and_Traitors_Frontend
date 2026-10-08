@@ -375,7 +375,6 @@ describe('LobbyRoom', () => {
       expect(before[index]).toBe('Ready')
 
       broadcastToRoom(room, 'player_ready_changed', {
-        lobbyCode: mockLobby.lobbyCode,
         playerId: guinevere.id,
         isReady: false,
       })
@@ -403,7 +402,6 @@ describe('LobbyRoom', () => {
       })
 
       broadcastToRoom(room, 'player_ready_changed', {
-        lobbyCode: mockLobby.lobbyCode,
         playerId: guinevere.id,
         isReady: true,
       })

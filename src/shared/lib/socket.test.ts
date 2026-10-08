@@ -3,11 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore } from './session'
 import { resetSocketForTests, onReconnect, subscribe } from './socket'
 
+interface Message {
+  event: string
+  room?: unknown
+  data?: unknown
+}
+
 /** A WebSocket the test drives by hand: open it, feed it, drop it. */
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []
   readyState = 0
-  sent: { event: string; data?: unknown }[] = []
+  sent: Message[] = []
   onopen: (() => void) | null = null
   onmessage: ((event: { data: string }) => void) | null = null
   onclose: (() => void) | null = null
@@ -30,14 +36,14 @@ class FakeWebSocket {
     this.readyState = 1
     this.onopen?.()
   }
-  receive(event: string, data?: unknown) {
-    this.onmessage?.({ data: JSON.stringify({ event, data }) })
+  receive(message: Message) {
+    this.onmessage?.({ data: JSON.stringify(message) })
   }
   drop() {
     this.close()
   }
   sentEvents() {
-    return this.sent.map((m) => `${m.event} ${(m.data as { room: string }).room}`)
+    return this.sent.map((m) => `${m.event} ${m.room}`)
   }
 }
 
@@ -102,7 +108,11 @@ describe('socket', () => {
 
       latest().open()
 
-      expect(latest().sentEvents()).toEqual(['join_room lobby:A', 'join_room lobby:B'])
+      // The room rides in the envelope, like every other message.
+      expect(latest().sent).toEqual([
+        { event: 'join_room', room: 'lobby:A' },
+        { event: 'join_room', room: 'lobby:B' },
+      ])
     })
 
     it('joins a new room straight away when already open', () => {
@@ -155,23 +165,10 @@ describe('socket', () => {
       subscribe('lobby:A', 'y', onY)
       latest().open()
 
-      latest().receive('x', { n: 1 })
+      latest().receive({ event: 'x', room: 'lobby:A', data: { n: 1 } })
 
       expect(onX).toHaveBeenCalledWith({ n: 1 })
       expect(onY).not.toHaveBeenCalled()
-    })
-
-    it("only reaches the named room's subscribers when the event names one", () => {
-      const inA = vi.fn()
-      const inB = vi.fn()
-      subscribe('lobby:A', 'x', inA)
-      subscribe('lobby:B', 'x', inB)
-      latest().open()
-
-      latest().receive('x', { room: 'lobby:B' })
-
-      expect(inA).not.toHaveBeenCalled()
-      expect(inB).toHaveBeenCalledTimes(1)
     })
 
     it('ignores messages that are not JSON events', () => {
@@ -192,9 +189,89 @@ describe('socket', () => {
       latest().open()
 
       stop()
-      latest().receive('x')
+      latest().receive({ event: 'x', room: 'lobby:A' })
 
       expect(handler).not.toHaveBeenCalled()
+    })
+  })
+
+  // Two lobbies listening for the same event must never hear each other's:
+  // the socket keeps rooms apart itself rather than trusting each feature to.
+  describe('room isolation', () => {
+    const event = 'player_ready_changed'
+    const data = { playerId: 'p1', isReady: true }
+
+    function twoLobbies() {
+      const handlerA = vi.fn()
+      const handlerB = vi.fn()
+      subscribe('lobby:A', event, handlerA)
+      subscribe('lobby:B', event, handlerB)
+      latest().open()
+      return { handlerA, handlerB }
+    }
+
+    it("delivers lobby A's event to lobby A only", () => {
+      const { handlerA, handlerB } = twoLobbies()
+
+      latest().receive({ event, room: 'lobby:A', data })
+
+      expect(handlerA).toHaveBeenCalledTimes(1)
+      expect(handlerA).toHaveBeenCalledWith(data)
+      expect(handlerB).not.toHaveBeenCalled()
+    })
+
+    it("delivers lobby B's event to lobby B only", () => {
+      const { handlerA, handlerB } = twoLobbies()
+
+      latest().receive({ event, room: 'lobby:B', data })
+
+      expect(handlerB).toHaveBeenCalledTimes(1)
+      expect(handlerB).toHaveBeenCalledWith(data)
+      expect(handlerA).not.toHaveBeenCalled()
+    })
+
+    it('delivers an event that names no room to nobody', () => {
+      const { handlerA, handlerB } = twoLobbies()
+
+      latest().receive({ event, data })
+
+      expect(handlerA).not.toHaveBeenCalled()
+      expect(handlerB).not.toHaveBeenCalled()
+    })
+
+    it('does not accept a room named in the data instead of the envelope', () => {
+      const { handlerA, handlerB } = twoLobbies()
+
+      latest().receive({ event, data: { ...data, room: 'lobby:A' } })
+
+      expect(handlerA).not.toHaveBeenCalled()
+      expect(handlerB).not.toHaveBeenCalled()
+    })
+
+    it('delivers an event for a room nobody listens to, to nobody', () => {
+      const { handlerA, handlerB } = twoLobbies()
+
+      latest().receive({ event, room: 'lobby:C', data })
+      latest().receive({ event, room: 42, data })
+
+      expect(handlerA).not.toHaveBeenCalled()
+      expect(handlerB).not.toHaveBeenCalled()
+    })
+
+    it('keeps delivering to the other lobby after one is left', () => {
+      const handlerA = vi.fn()
+      const handlerB = vi.fn()
+      const leaveA = subscribe('lobby:A', event, handlerA)
+      subscribe('lobby:B', event, handlerB)
+      latest().open()
+
+      leaveA()
+      // The server may not have processed our leave yet.
+      latest().receive({ event, room: 'lobby:A', data })
+      latest().receive({ event, room: 'lobby:B', data })
+
+      expect(handlerA).not.toHaveBeenCalled()
+      expect(handlerB).toHaveBeenCalledTimes(1)
     })
   })
 

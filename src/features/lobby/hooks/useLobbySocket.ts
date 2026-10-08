@@ -12,18 +12,13 @@ export function lobbyRoom(lobbyCode: string) {
 }
 
 interface PlayerReadyChanged {
-  lobbyCode: string;
   playerId: string;
   isReady: boolean;
 }
 
 function isPlayerReadyChanged(data: unknown): data is PlayerReadyChanged {
   const d = data as Partial<PlayerReadyChanged> | null;
-  return (
-    typeof d?.lobbyCode === "string" &&
-    typeof d.playerId === "string" &&
-    typeof d.isReady === "boolean"
-  );
+  return typeof d?.playerId === "string" && typeof d.isReady === "boolean";
 }
 
 /**
@@ -39,8 +34,9 @@ export function useLobbySocket(lobbyCode: string | null) {
     if (!lobbyCode) return;
 
     const stopListening = subscribe(lobbyRoom(lobbyCode), PLAYER_READY_CHANGED, (data) => {
-      if (!isPlayerReadyChanged(data) || data.lobbyCode !== lobbyCode) return;
-      // Only touch the lobby this event is about.
+      if (!isPlayerReadyChanged(data)) return;
+      // The socket only passes on this lobby's room, so the event is ours;
+      // the store, though, may have moved on to another lobby since.
       if (useLobbyStore.getState().lobby?.lobbyCode !== lobbyCode) return;
       useLobbyStore.getState().setPlayerReady(data.playerId, data.isReady);
     });

@@ -123,9 +123,9 @@ const socketServer = ws.link(socketBaseUrl())
 type SocketClient = typeof socketServer.clients extends Set<infer Client> ? Client : never
 const clientRooms = new Map<SocketClient, Set<string>>()
 
-/** Sends `{ event, data }` to every client in `room`, as the server would. */
+/** Sends `{ event, room, data }` to every client in `room`, as the server would. */
 export function broadcastToRoom(room: string, event: string, data: unknown) {
-  const message = JSON.stringify({ event, data })
+  const message = JSON.stringify({ event, room, data })
   for (const [client, rooms] of clientRooms) {
     if (rooms.has(room)) client.send(message)
   }
@@ -278,7 +278,6 @@ export const handlers = [
       })
       // Everyone in the lobby hears about it - the sender included.
       broadcastToRoom(`lobby:${params.code}`, 'player_ready_changed', {
-        lobbyCode: params.code,
         playerId: account.id,
         isReady,
       })
@@ -289,14 +288,14 @@ export const handlers = [
   socketServer.addEventListener('connection', ({ client }) => {
     clientRooms.set(client, new Set())
     client.addEventListener('message', (event) => {
-      let message: { event?: string; data?: { room?: string } }
+      let message: { event?: string; room?: unknown } | null
       try {
         message = JSON.parse(String(event.data))
       } catch {
         return
       }
-      const room = message.data?.room
-      if (typeof room !== 'string') return
+      const room = message?.room
+      if (!message || typeof room !== 'string') return
       if (message.event === 'join_room') clientRooms.get(client)?.add(room)
       if (message.event === 'leave_room') clientRooms.get(client)?.delete(room)
     })
