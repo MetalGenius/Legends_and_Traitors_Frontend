@@ -10,6 +10,8 @@ import {
   type LobbyData,
 } from '@features/lobby'
 import {
+  broadcastToRoom,
+  joinedRooms,
   mockGuest,
   mockGuestSession,
   mockHostSession,
@@ -350,6 +352,90 @@ describe('LobbyRoom', () => {
       await waitFor(() => {
         expect(screen.getByRole('switch').getAttribute('aria-busy')).toBe('false')
       })
+    })
+  })
+
+  describe('live updates', () => {
+    const room = `lobby:${mockLobby.lobbyCode}`
+    const guinevere = mockLobby.players.find((p) => p.username === 'Guinevere')!
+
+    /** Each card's status, in player order. */
+    function statuses() {
+      return screen.getAllByTestId('player-ready-status').map((s) => s.textContent)
+    }
+
+    it("flips another player's card when the server says they changed", async () => {
+      renderLobby()
+      await screen.findByText(playerCount(mockLobby))
+      await waitFor(() => {
+        expect(joinedRooms()).toContain(room)
+      })
+      const before = statuses()
+      const index = mockLobby.players.indexOf(guinevere)
+      expect(before[index]).toBe('Ready')
+
+      broadcastToRoom(room, 'player_ready_changed', {
+        lobbyCode: mockLobby.lobbyCode,
+        playerId: guinevere.id,
+        isReady: false,
+      })
+
+      await waitFor(() => {
+        expect(statuses()[index]).toBe('Not Ready')
+      })
+      // Nobody else's card moved.
+      expect(statuses().filter((_, i) => i !== index)).toEqual(
+        before.filter((_, i) => i !== index),
+      )
+    })
+
+    it('enables Start Game the moment the last player readies up elsewhere', async () => {
+      // Everyone ready but Guinevere.
+      serveLobby({
+        ...mockLobby,
+        players: mockLobby.players.map((p) => ({ ...p, isReady: p.id !== guinevere.id })),
+      })
+      renderLobby()
+      const start = await screen.findByRole('button', { name: 'Start Game' })
+      expect(start.getAttribute('aria-disabled')).toBe('true')
+      await waitFor(() => {
+        expect(joinedRooms()).toContain(room)
+      })
+
+      broadcastToRoom(room, 'player_ready_changed', {
+        lobbyCode: mockLobby.lobbyCode,
+        playerId: guinevere.id,
+        isReady: true,
+      })
+
+      await waitFor(() => {
+        expect(start.getAttribute('aria-disabled')).toBe('false')
+      })
+    })
+
+    it("keeps the player's own toggle steady when the server echoes it back", async () => {
+      renderLobby()
+      const card = await screen.findByRole('switch')
+      await waitFor(() => {
+        expect(joinedRooms()).toContain(room)
+      })
+
+      fireEvent.click(card)
+
+      // The PATCH succeeds and the mock server broadcasts it to the room,
+      // us included; the card ends where the click put it.
+      await waitFor(() => {
+        expect(card.getAttribute('aria-busy')).toBe('false')
+      })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(card.getAttribute('aria-checked')).toBe('true')
+    })
+
+    it('does not subscribe on the way to a redirect', async () => {
+      renderLobby({}, 'ZZ99ZZ')
+
+      expect(await screen.findByText('Home screen')).toBeDefined()
+      expect(joinedRooms()).toEqual([])
     })
   })
 

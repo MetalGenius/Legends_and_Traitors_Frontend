@@ -351,3 +351,72 @@ describe('Start Game', () => {
     cy.get('[role="tooltip"]').should('have.text', 'Waiting for all players to be ready')
   })
 })
+
+/**
+ * Swaps the page's WebSocket for a fake before the app loads (the preview
+ * build has no MSW and nothing serves /ws). Records what the app sends on
+ * `win.fakeSocket.sent`; `win.fakeSocket.push(event, data)` plays the server.
+ */
+function installFakeSocket(win) {
+  const socket = { sent: [], instance: null }
+  socket.push = (event, data) =>
+    socket.instance.onmessage?.({ data: JSON.stringify({ event, data }) })
+  win.fakeSocket = socket
+  win.WebSocket = class {
+    constructor(url) {
+      this.url = url
+      this.readyState = 0
+      socket.instance = this
+      setTimeout(() => {
+        this.readyState = 1
+        this.onopen?.()
+      }, 0)
+    }
+    send(data) {
+      socket.sent.push(JSON.parse(data))
+    }
+    close() {
+      this.readyState = 3
+    }
+  }
+}
+
+describe('Live ready updates', () => {
+  beforeEach(() => {
+    cy.intercept('GET', '/api/lobby/ABC123', { body: joinedLobby() }).as('getLobby')
+    cy.visit('/lobby/ABC123', {
+      onBeforeLoad(win) {
+        seedSession('guest-token', guest)(win)
+        installFakeSocket(win)
+      },
+    })
+    cy.wait('@getLobby')
+  })
+
+  it('joins the lobby room over one connection, carrying the token', () => {
+    cy.window()
+      .its('fakeSocket.sent')
+      .should('deep.include', { event: 'join_room', data: { room: 'lobby:ABC123' } })
+    cy.window()
+      .its('fakeSocket.instance.url')
+      .should('match', /\/ws\?token=guest-token$/)
+  })
+
+  it("flips another player's card when the server announces a change", () => {
+    cy.window().its('fakeSocket.sent').should('have.length.at.least', 1)
+    // The host's card (not ours) - shown as plain status.
+    cy.get('[data-testid="player-ready-status"]').first().should('have.text', 'Not Ready')
+
+    cy.window().then((win) =>
+      win.fakeSocket.push('player_ready_changed', {
+        lobbyCode: 'ABC123',
+        playerId: host.id,
+        isReady: true,
+      }),
+    )
+
+    cy.get('[data-testid="player-ready-status"]').first().should('have.text', 'Ready')
+    // Our own card is untouched.
+    cy.get('[role="switch"]').should('have.attr', 'aria-checked', 'false')
+  })
+})

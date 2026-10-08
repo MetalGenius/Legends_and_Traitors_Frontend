@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest'
 import { resetMockLobbies } from '@mocks/handlers'
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
+import { resetSocketForTests } from '@shared/lib/socket'
 
 // Any request without a matching handler fails the test immediately, instead
 // of silently attempting a real network call.
@@ -23,7 +24,9 @@ afterEach(() => {
   // Drop per-test `server.use()` overrides so a failure case can't leak into
   // the next test.
   server.resetHandlers()
-  // Joins and ready toggles change the mock server's lobbies; start fresh.
+  // Close any live-update connection a test opened, then reset the mock
+  // server's lobbies (joins and ready toggles change them) and rooms.
+  resetSocketForTests()
   resetMockLobbies()
   // The session store persists here; don't let it leak into the next test.
   localStorage.clear()
