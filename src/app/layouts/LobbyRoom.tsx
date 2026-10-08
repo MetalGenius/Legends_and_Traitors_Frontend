@@ -6,6 +6,7 @@ import {
   useLobbyState,
   useLobbyStore,
   usePlayerStore,
+  useLobbySocket,
   useReadyToggle,
   PlayerListItem,
   StartGameButton,
@@ -26,6 +27,8 @@ export default function LobbyScreen({
   // Loads the lobby into the store, or redirects Home if the code is bad.
   const { isLoading, isJoining } = useLobbyState(code);
   const lobby = useLobbyStore((state) => state.lobby);
+  // Live updates once we're actually in (never on the way to a redirect).
+  useLobbySocket(isLoading ? null : (lobby?.lobbyCode ?? null));
   // The name this lobby knows us by once joined, else the account's own
   // display name (never the username handle).
   const playerName = usePlayerStore((state) => state.displayName);

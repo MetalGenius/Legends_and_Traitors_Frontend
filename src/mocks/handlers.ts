@@ -1,4 +1,4 @@
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, ws } from 'msw'
 
 import {
   AUTH_ENDPOINTS,
@@ -16,6 +16,7 @@ import {
 } from '@features/lobby'
 import { MAX_PLAYERS } from '@shared/config/game'
 import type { SessionAccount } from '@shared/lib/session'
+import { socketBaseUrl } from '@shared/lib/socket'
 
 // Default (happy-path) handlers shared by every test. A test that needs a
 // failure overrides one with `server.use()`; the override is reset after each
@@ -116,8 +117,33 @@ export const mockFullLobby: LobbyResponse['data'] = {
 // above, which stay untouched for tests to compare against.
 const lobbies = new Map<string, LobbyResponse['data']>()
 
+// The mock real-time server: which rooms each connected client has joined.
+// Mirrors the provisional protocol in src/shared/lib/socket.ts.
+const socketServer = ws.link(socketBaseUrl())
+type SocketClient = typeof socketServer.clients extends Set<infer Client> ? Client : never
+const clientRooms = new Map<SocketClient, Set<string>>()
+
+/** Sends `{ event, room, data }` to every client in `room`, as the server would. */
+export function broadcastToRoom(room: string, event: string, data: unknown) {
+  const message = JSON.stringify({ event, room, data })
+  for (const [client, rooms] of clientRooms) {
+    if (rooms.has(room)) client.send(message)
+  }
+}
+
+/** Drops every live socket connection, as a flaky network would. For tests. */
+export function dropSocketClients() {
+  for (const client of socketServer.clients) client.close()
+}
+
+/** Rooms a mock-socket client has joined, across all clients. For tests. */
+export function joinedRooms(): string[] {
+  return [...clientRooms.values()].flatMap((rooms) => [...rooms])
+}
+
 /** Puts every mock lobby back to its fixture. Runs after each test. */
 export function resetMockLobbies() {
+  clientRooms.clear()
   lobbies.clear()
   for (const lobby of [mockLobby, mockFullLobby]) {
     lobbies.set(lobby.lobbyCode, structuredClone(lobby))
@@ -244,15 +270,37 @@ export const handlers = [
         )
       }
       const { isReady } = await request.json()
-      return HttpResponse.json({
-        status: 'SUCCESS',
-        data: saveMockLobby({
-          ...lobby,
-          players: lobby.players.map((player) =>
-            player.id === account.id ? { ...player, isReady } : player,
-          ),
-        }),
+      const updated = saveMockLobby({
+        ...lobby,
+        players: lobby.players.map((player) =>
+          player.id === account.id ? { ...player, isReady } : player,
+        ),
       })
+      // Everyone in the lobby hears about it - the sender included.
+      broadcastToRoom(`lobby:${params.code}`, 'player_ready_changed', {
+        playerId: account.id,
+        isReady,
+      })
+      return HttpResponse.json({ status: 'SUCCESS', data: updated })
     },
   ),
+
+  socketServer.addEventListener('connection', ({ client }) => {
+    clientRooms.set(client, new Set())
+    client.addEventListener('message', (event) => {
+      let message: { event?: string; room?: unknown } | null
+      try {
+        message = JSON.parse(String(event.data))
+      } catch {
+        return
+      }
+      const room = message?.room
+      if (!message || typeof room !== 'string') return
+      if (message.event === 'join_room') clientRooms.get(client)?.add(room)
+      if (message.event === 'leave_room') clientRooms.get(client)?.delete(room)
+    })
+    client.addEventListener('close', () => {
+      clientRooms.delete(client)
+    })
+  }),
 ]
