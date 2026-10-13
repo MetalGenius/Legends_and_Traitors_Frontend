@@ -14,7 +14,8 @@ export const READY_FAILED_MESSAGE =
  */
 export function useReadyToggle(lobbyCode: string) {
   const setPlayerReady = useLobbyStore((state) => state.setPlayerReady);
-  const setLobby = useLobbyStore((state) => state.setLobby);
+  const checkpoint = useLobbyStore((state) => state.checkpoint);
+  const mergeLobby = useLobbyStore((state) => state.mergeLobby);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A ref as well as state: a second click can land before the re-render
@@ -38,10 +39,13 @@ export function useReadyToggle(lobbyCode: string) {
     setIsSaving(true);
     setError(null);
     setPlayerReady(me.id, next);
+    // Whatever changes from here on is newer than this request's answer.
+    const since = checkpoint();
     try {
       const response = await setReadyState(lobbyCode, next);
-      // The server's lobby is the truth (it may have other players' changes).
-      if (stillHere()) setLobby(response.data);
+      // Take the server's lobby (players may have come or gone) - except for
+      // ready changes that arrived live while we waited, which it predates.
+      if (stillHere()) mergeLobby(response.data, since);
     } catch (err) {
       if (stillHere()) setPlayerReady(me.id, previous);
       setError(

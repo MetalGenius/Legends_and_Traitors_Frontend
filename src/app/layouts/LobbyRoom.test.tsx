@@ -429,6 +429,53 @@ describe('LobbyRoom', () => {
       expect(card.getAttribute('aria-checked')).toBe('true')
     })
 
+    it("keeps another player's change that lands while our own toggle is saving", async () => {
+      // The ready request stays open until the test answers it.
+      let answer!: (response: Response) => void
+      const requested = new Promise<void>((arrived) => {
+        server.use(
+          http.patch(LOBBY_ENDPOINTS.ready(':code'), () => {
+            arrived()
+            return new Promise<Response>((resolve) => {
+              answer = resolve
+            })
+          }),
+        )
+      })
+      renderLobby()
+      const card = await screen.findByRole('switch')
+      await waitFor(() => {
+        expect(joinedRooms()).toContain(room)
+      })
+      const index = mockLobby.players.indexOf(guinevere)
+
+      fireEvent.click(card)
+      await requested
+      // Guinevere un-readies, and the socket tells us before the server
+      // answers our own request...
+      broadcastToRoom(room, 'player_ready_changed', { playerId: guinevere.id, isReady: false })
+      await waitFor(() => {
+        expect(statuses()[index]).toBe('Not Ready')
+      })
+      // ...with a lobby from before her change: in it, she is still ready.
+      answer(
+        HttpResponse.json({
+          status: 'SUCCESS',
+          data: {
+            ...mockLobby,
+            players: mockLobby.players.map((p) => (p.isHost ? { ...p, isReady: true } : p)),
+          },
+        }),
+      )
+
+      // Saving is over once the answer has been applied.
+      await waitFor(() => {
+        expect(card.getAttribute('aria-busy')).toBe('false')
+      })
+      expect(statuses()[index]).toBe('Not Ready')
+      expect(card.getAttribute('aria-checked')).toBe('true')
+    })
+
     it('does not subscribe on the way to a redirect', async () => {
       renderLobby({}, 'ZZ99ZZ')
 

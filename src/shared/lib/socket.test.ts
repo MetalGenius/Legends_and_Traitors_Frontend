@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useSessionStore } from './session'
-import { resetSocketForTests, onReconnect, subscribe } from './socket'
+import { resetSocketForTests, onReconnect, parseEnvelope, subscribe } from './socket'
 
 interface Message {
   event: string
@@ -62,6 +62,55 @@ afterEach(() => {
 })
 
 describe('socket', () => {
+  // The format written down in docs/websocket-protocol.md. Change one, change
+  // the other - and the backend with them.
+  describe('message format', () => {
+    it('is { event, room, data }', () => {
+      const message = {
+        event: 'player_ready_changed',
+        room: 'lobby:AB12CD',
+        data: { playerId: 'player-2', isReady: true },
+      }
+
+      expect(parseEnvelope(JSON.stringify(message))).toEqual(message)
+    })
+
+    it('allows a message with no data', () => {
+      const message = { event: 'join_room', room: 'lobby:AB12CD' }
+
+      expect(parseEnvelope(JSON.stringify(message))).toEqual(message)
+    })
+
+    it.each([
+      ['has no room', { event: 'x', data: {} }],
+      ['names its room inside data', { event: 'x', data: { room: 'lobby:A' } }],
+      ['has a room that is not a string', { event: 'x', room: 42 }],
+      ['has no event', { room: 'lobby:A', data: {} }],
+      ['has an event that is not a string', { event: 7, room: 'lobby:A' }],
+      ['is not an object', 'x'],
+      ['is null', null],
+    ])('rejects a message that %s', (_why, message) => {
+      expect(parseEnvelope(JSON.stringify(message))).toBeNull()
+    })
+
+    it('rejects a frame that is not JSON', () => {
+      expect(parseEnvelope('player_ready_changed')).toBeNull()
+    })
+
+    it('is what the client sends, too', () => {
+      const leaveA = subscribe('lobby:A', 'x', () => {})
+      subscribe('lobby:B', 'x', () => {})
+      latest().open()
+      leaveA()
+
+      expect(latest().sent).toEqual([
+        { event: 'join_room', room: 'lobby:A' },
+        { event: 'join_room', room: 'lobby:B' },
+        { event: 'leave_room', room: 'lobby:A' },
+      ])
+    })
+  })
+
   describe('one shared connection', () => {
     it('opens on the first subscription and is reused by later ones', () => {
       subscribe('lobby:A', 'x', () => {})
@@ -108,11 +157,7 @@ describe('socket', () => {
 
       latest().open()
 
-      // The room rides in the envelope, like every other message.
-      expect(latest().sent).toEqual([
-        { event: 'join_room', room: 'lobby:A' },
-        { event: 'join_room', room: 'lobby:B' },
-      ])
+      expect(latest().sentEvents()).toEqual(['join_room lobby:A', 'join_room lobby:B'])
     })
 
     it('joins a new room straight away when already open', () => {

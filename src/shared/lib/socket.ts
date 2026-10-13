@@ -6,11 +6,11 @@ import { useSessionStore } from './session'
  * this module opens the connection for the first subscriber, reuses it for
  * the rest, and closes it once nobody is listening.
  *
- * PROVISIONAL PROTOCOL - the backend hasn't chosen one. Assumed: a plain
- * WebSocket carrying JSON `{ event, room, data }` messages. The room is part
- * of every message, both ways: we send `join_room` / `leave_room` naming
- * one, and each event the server sends names the room it is for. Switching
- * to e.g. Socket.IO should only mean rewriting this file.
+ * PROVISIONAL PROTOCOL - proposed to Backend, not agreed yet. The contract
+ * is docs/websocket-protocol.md: one `{ event, room, data }` message format
+ * in both directions, over a plain WebSocket. Change that file, this one and
+ * the mock server (src/mocks/handlers.ts) together. Switching to e.g.
+ * Socket.IO should only mean rewriting this file.
  */
 
 type Handler = (data: unknown) => void
@@ -21,10 +21,27 @@ interface Subscription {
   handler: Handler
 }
 
-interface Envelope {
+/** One message on the wire, whichever way it is going. */
+export interface Envelope {
   event: string
   room: string
   data?: unknown
+}
+
+/**
+ * Reads a raw frame as a message, or returns null if it isn't one. This is
+ * the whole format: JSON with a string `event`, a string `room`, and
+ * optionally `data`.
+ */
+export function parseEnvelope(raw: unknown): Envelope | null {
+  let message: Partial<Envelope> | null
+  try {
+    message = JSON.parse(String(raw)) as Partial<Envelope> | null
+  } catch {
+    return null
+  }
+  if (typeof message?.event !== 'string' || typeof message.room !== 'string') return null
+  return { event: message.event, room: message.room, data: message.data }
 }
 
 const OPEN = 1
@@ -53,7 +70,9 @@ export function socketBaseUrl(): string {
 function socketUrl(): string {
   const url = new URL(socketBaseUrl())
   // Browsers can't set headers on a WebSocket, so the token rides along in
-  // the query string.
+  // the query string - where proxies and access logs may record it. Not to
+  // be pointed at a real backend until "Security" in
+  // docs/websocket-protocol.md has been settled.
   const { token } = useSessionStore.getState()
   if (token) url.searchParams.set('token', token)
   return url.toString()
@@ -64,15 +83,11 @@ function send(message: Envelope) {
 }
 
 function dispatch(raw: unknown) {
-  let message: Partial<Envelope> | null
-  try {
-    message = JSON.parse(String(raw)) as Partial<Envelope> | null
-  } catch {
-    return // Not ours to understand.
-  }
   // Rooms are kept apart here, once, so no feature has to check whose event
-  // it was handed. A message naming no room reaches nobody - never everybody.
-  if (typeof message?.event !== 'string' || typeof message.room !== 'string') return
+  // it was handed. A message naming no room isn't one at all, and reaches
+  // nobody - never everybody.
+  const message = parseEnvelope(raw)
+  if (!message) return
 
   for (const sub of subscriptions) {
     if (sub.event === message.event && sub.room === message.room) sub.handler(message.data)

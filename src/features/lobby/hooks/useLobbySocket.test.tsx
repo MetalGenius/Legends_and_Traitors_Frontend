@@ -2,18 +2,19 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { LOBBY_ENDPOINTS } from '@features/lobby/api/lobbyApi'
+import { LOBBY_ENDPOINTS, setReadyState } from '@features/lobby/api/lobbyApi'
 import { useLobbyStore } from '@features/lobby/stores/lobbyStore'
 import {
   broadcastToRoom,
   dropSocketClients,
   joinedRooms,
+  mockHost,
   mockHostSession,
   mockLobby,
 } from '@mocks/handlers'
 import { server } from '@mocks/server'
 import { useSessionStore } from '@shared/lib/session'
-import { subscribe } from '@shared/lib/socket'
+import { socketBaseUrl, subscribe } from '@shared/lib/socket'
 
 import { lobbyRoom, PLAYER_READY_CHANGED, useLobbySocket } from './useLobbySocket'
 
@@ -42,10 +43,83 @@ function announce(data: object) {
   broadcastToRoom(lobbyRoom(code), PLAYER_READY_CHANGED, data)
 }
 
+/** mockLobby as the server would answer with it, with these ready flags instead. */
+function lobbyWith(flags: Record<string, boolean>) {
+  return {
+    ...mockLobby,
+    players: mockLobby.players.map((p) => (p.id in flags ? { ...p, isReady: flags[p.id] } : p)),
+  }
+}
+
+/**
+ * Holds every lobby fetch open. Each one that arrives adds a function to the
+ * returned list, in order; call it with a lobby to answer that fetch.
+ */
+function holdLobbyFetches() {
+  const answers: ((lobby: object) => void)[] = []
+  server.use(
+    http.get(
+      LOBBY_ENDPOINTS.detail(':code'),
+      () =>
+        new Promise<Response>((resolve) => {
+          answers.push((lobby) => resolve(HttpResponse.json({ status: 'SUCCESS', data: lobby })))
+        }),
+    ),
+  )
+  return answers
+}
+
+/**
+ * Drops the connection, then waits (through the 1s backoff) until the hook
+ * is back in its room and has asked for the lobby again - `fetches` in all.
+ */
+async function reconnect(answers: unknown[], fetches: number) {
+  dropSocketClients()
+  await waitFor(() => {
+    expect(joinedRooms()).toEqual([])
+  })
+  await waitFor(
+    () => {
+      expect(joinedRooms()).toEqual([lobbyRoom(code)])
+      expect(answers).toHaveLength(fetches)
+    },
+    { timeout: 3_000 },
+  )
+}
+
 beforeEach(() => {
   const { token, account } = mockHostSession
   useSessionStore.getState().setSession(token, account)
   useLobbyStore.getState().setLobby(structuredClone(mockLobby))
+})
+
+// The event exactly as docs/websocket-protocol.md has it, read off the wire
+// rather than through the app's own socket code.
+describe('player_ready_changed on the wire', () => {
+  it('is broadcast to the lobby room, in the documented format, when a player readies up', async () => {
+    const frames: unknown[] = []
+    const wire = new WebSocket(socketBaseUrl())
+    wire.addEventListener('message', (event) => frames.push(JSON.parse(String(event.data))))
+    await new Promise((resolve) => wire.addEventListener('open', resolve))
+    wire.send(JSON.stringify({ event: 'join_room', room: 'lobby:AB12CD' }))
+    await waitFor(() => {
+      expect(joinedRooms()).toEqual(['lobby:AB12CD'])
+    })
+
+    // The host (signed in above) readies up over REST.
+    await setReadyState('AB12CD', true)
+
+    await waitFor(() => {
+      expect(frames).toEqual([
+        {
+          event: 'player_ready_changed',
+          room: 'lobby:AB12CD',
+          data: { playerId: mockHost.id, isReady: true },
+        },
+      ])
+    })
+    wire.close()
+  })
 })
 
 describe('useLobbySocket', () => {
@@ -163,27 +237,65 @@ describe('useLobbySocket', () => {
     })
   })
 
-  it('catches up on what it missed after the connection drops', async () => {
-    await renderSubscribed()
-    // While offline, Guinevere un-readied - and nobody heard the broadcast.
-    const missed = {
-      ...mockLobby,
-      players: mockLobby.players.map((p) => (p.id === guinevere.id ? { ...p, isReady: false } : p)),
-    }
-    server.use(
-      http.get(LOBBY_ENDPOINTS.detail(':code'), () =>
-        HttpResponse.json({ status: 'SUCCESS', data: missed }),
-      ),
-    )
+  describe('after the connection drops', () => {
+    it('catches up on what it missed', async () => {
+      await renderSubscribed()
+      // While offline, Guinevere un-readied - and nobody heard the broadcast.
+      server.use(
+        http.get(LOBBY_ENDPOINTS.detail(':code'), () =>
+          HttpResponse.json({ status: 'SUCCESS', data: lobbyWith({ [guinevere.id]: false }) }),
+        ),
+      )
 
-    dropSocketClients()
+      dropSocketClients()
 
-    // Reconnects after the 1s backoff, then refetches.
-    await waitFor(
-      () => {
+      // Reconnects after the 1s backoff, then refetches.
+      await waitFor(
+        () => {
+          expect(readyOf(guinevere.id)).toBe(false)
+        },
+        { timeout: 3_000 },
+      )
+    })
+
+    it('keeps a live update that lands before the catch-up answer does', async () => {
+      await renderSubscribed()
+      const answers = holdLobbyFetches()
+      await reconnect(answers, 1)
+
+      // Back online with the catch-up request still out, Guinevere un-readies
+      // and the event reaches us first...
+      announce({ playerId: guinevere.id, isReady: false })
+      await waitFor(() => {
         expect(readyOf(guinevere.id)).toBe(false)
-      },
-      { timeout: 3_000 },
-    )
+      })
+      // ...then the answer, put together before she did: in it she is still
+      // ready. It does know Lancelot un-readied while we were offline.
+      answers[0](lobbyWith({ [lancelot.id]: false }))
+
+      await waitFor(() => {
+        expect(readyOf(lancelot.id)).toBe(false)
+      })
+      expect(readyOf(guinevere.id)).toBe(false)
+    })
+
+    it('uses only the latest answer when it has reconnected twice', async () => {
+      await renderSubscribed()
+      const answers = holdLobbyFetches()
+      await reconnect(answers, 1)
+      await reconnect(answers, 2)
+
+      // The second request is answered first...
+      answers[1](lobbyWith({ [guinevere.id]: false }))
+      await waitFor(() => {
+        expect(readyOf(guinevere.id)).toBe(false)
+      })
+      // ...and the first, older one straggles in after it.
+      answers[0](lobbyWith({ [lancelot.id]: false }))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      expect(readyOf(guinevere.id)).toBe(false)
+      expect(readyOf(lancelot.id)).toBe(true)
+    })
   })
 })

@@ -42,11 +42,19 @@ export function useLobbySocket(lobbyCode: string | null) {
     });
 
     // Anything broadcast while the connection was down is lost; catch up.
+    let resyncs = 0;
     const stopResyncing = onReconnect(() => {
+      resyncs += 1;
+      const resync = resyncs;
+      // Events flow again from here on, and any that land before the answer
+      // does are newer than it: mergeLobby keeps them.
+      const since = useLobbyStore.getState().checkpoint();
       getLobbyState(lobbyCode)
         .then((response) => {
+          // Reconnected again since asking: that later answer is the one to use.
+          if (resync !== resyncs) return;
           if (useLobbyStore.getState().lobby?.lobbyCode === lobbyCode) {
-            useLobbyStore.getState().setLobby(response.data);
+            useLobbyStore.getState().mergeLobby(response.data, since);
           }
         })
         .catch(() => {

@@ -10,9 +10,21 @@ import { useSessionStore } from '@shared/lib/session'
 
 import { READY_FAILED_MESSAGE, useReadyToggle } from './useReadyToggle'
 
+function readyOf(playerId: string) {
+  return useLobbyStore.getState().lobby?.players.find((p) => p.id === playerId)?.isReady
+}
+
 /** The host's ready flag as the lobby page currently shows it. */
 function hostIsReady() {
-  return useLobbyStore.getState().lobby?.players.find((p) => p.id === mockHost.id)?.isReady
+  return readyOf(mockHost.id)
+}
+
+/** mockLobby as the server would answer with it, with these ready flags instead. */
+function lobbyWith(flags: Record<string, boolean>) {
+  return {
+    ...mockLobby,
+    players: mockLobby.players.map((p) => (p.id in flags ? { ...p, isReady: flags[p.id] } : p)),
+  }
 }
 
 /**
@@ -94,6 +106,56 @@ describe('useReadyToggle', () => {
     })
 
     expect(hostIsReady()).toBe(false)
+  })
+
+  // The server's answer is the lobby as it was when it replied, which can be
+  // older than a live update the socket delivered in the meantime.
+  describe('when a live update lands before the server answers', () => {
+    const guinevere = mockLobby.players.find((p) => p.username === 'Guinevere')!
+    const lancelot = mockLobby.players.find((p) => p.username === 'Lancelot')!
+
+    /** Toggles, runs `meanwhile` while the request is out, then answers it. */
+    async function toggleWith(meanwhile: () => void, answer: object) {
+      const held = holdReadyRequest()
+      const { result } = renderHook(() => useReadyToggle(mockLobby.lobbyCode))
+
+      let toggling!: Promise<void>
+      act(() => {
+        toggling = result.current.toggleReady()
+      })
+      act(meanwhile)
+      await act(async () => {
+        await held.respond(HttpResponse.json({ status: 'SUCCESS', data: answer }))
+        await toggling
+      })
+    }
+
+    it("keeps the other player's newer ready status", async () => {
+      await toggleWith(
+        // Guinevere un-readies, and the socket says so first.
+        () => useLobbyStore.getState().setPlayerReady(guinevere.id, false),
+        // The answer predates that: in it, she is still ready.
+        lobbyWith({ [mockHost.id]: true }),
+      )
+
+      expect(readyOf(guinevere.id)).toBe(false)
+      expect(hostIsReady()).toBe(true)
+    })
+
+    it('still takes everything else from the answer', async () => {
+      const newcomer = { id: 'player-9', username: 'Percival', isHost: false, isReady: false }
+      const answer = lobbyWith({ [mockHost.id]: true, [lancelot.id]: false })
+
+      await toggleWith(() => useLobbyStore.getState().setPlayerReady(guinevere.id, false), {
+        ...answer,
+        players: [...answer.players, newcomer],
+      })
+
+      // A change we never heard live, and a player who joined meanwhile.
+      expect(readyOf(lancelot.id)).toBe(false)
+      expect(useLobbyStore.getState().lobby?.players.at(-1)).toEqual(newcomer)
+      expect(readyOf(guinevere.id)).toBe(false)
+    })
   })
 
   describe('when the server refuses', () => {
